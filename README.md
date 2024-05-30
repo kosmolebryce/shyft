@@ -2,7 +2,11 @@
 
 ## Shyft
 > `v0.1.0`
+<<<<<<< HEAD
 > <caption>*by OpenClaims*</caption>
+=======
+> *by OpenClaims*
+>>>>>>> dev
 
 ----
 
