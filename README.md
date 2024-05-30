@@ -2,7 +2,7 @@
 
 ## Shyft
 > `v0.1.0`
-> - *by OpenClams*
+> *by OpenClaims*
 
 ----
 
