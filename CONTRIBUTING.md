@@ -24,6 +24,7 @@ contained in any branch of the [repository](https://github.com/kosmolebryce/Shyf
 given that you:
 
 > a )	include proper attribution for the source code wherever you implement it; and
+>
 > b )	retain for your implementation of the source code itself (but not necessarily,
 >       for example, the rest of your proprietary code) the same licensure as provided
 >       in this release.
