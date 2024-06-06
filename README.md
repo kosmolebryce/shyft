@@ -3,7 +3,7 @@
 ## Shyft
 
 > `v0.1.0`
-> *by OpenClaims*
+> *by Enclaim*
 
 ----
 
@@ -11,7 +11,8 @@
 
 `Shyft` is a shift-logging GUI utility designed to help data annotators
 more effectively track and manage their service and billing records. It
-uses the `tkinter` GUI framework, which, as of this writing, is a component of Python's standard library.
+uses the `tkinter` GUI framework, which, as of this writing, is a compo-
+nent of Python's standard library.
 
 ----
 

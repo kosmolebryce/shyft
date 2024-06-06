@@ -3,3 +3,7 @@
 __pycache__
 venv
 build
+**/venv
+/venv
+build
+**/build

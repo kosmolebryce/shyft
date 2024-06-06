@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CsvFileAttributes">
+    <option name="attributeMap">
+      <map>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/Frameworks/BearCore.framework/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/Frameworks/BearCore.framework/Versions/A/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/Frameworks/BearCore.framework/Versions/Current/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Intents macOS.appex/Contents/Frameworks/BearCore.framework/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Intents macOS.appex/Contents/Frameworks/BearCore.framework/Versions/A/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Intents macOS.appex/Contents/Frameworks/BearCore.framework/Versions/Current/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Widgets Extension.appex/Contents/Frameworks/BearCore.framework/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Widgets Extension.appex/Contents/Frameworks/BearCore.framework/Versions/A/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Bear Widgets Extension.appex/Contents/Frameworks/BearCore.framework/Versions/Current/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Dynamic Widgets.appex/Contents/Frameworks/BearCore.framework/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Dynamic Widgets.appex/Contents/Frameworks/BearCore.framework/Versions/A/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/src/shyft/dist/shyft_app/Applications/Bear.app/Contents/PlugIns/Dynamic Widgets.appex/Contents/Frameworks/BearCore.framework/Versions/Current/Resources/Custom Tag Keywords/tagconsearch_en.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value=";" />
+            </Attribute>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
