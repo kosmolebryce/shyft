@@ -10,10 +10,12 @@ Usage:
 from setuptools import setup
 
 APP = ["Shyft.py"]
-DATA_FILES = []
+DATA_FILES = [
+    ('', ['data.json']),
+]
 OPTIONS = {
     "iconfile": "resources/icon.icns",
-    "includes": ["tkinter"],
+    'includes': ['tkinter', 'multiprocessing'],  # Include necessary modules
     "plist": {
         "CFBundleName": "Shyft",
         "CFBundleIdentifier": "com.enclaim.shyft",
@@ -25,6 +27,7 @@ OPTIONS = {
         "NSSupportsAutomaticGraphicsSwitching": "true",
         "NSAppSleepDisabled": "true",
         "NSHighResolutionCapable": "true",
+        
     },
 }
 

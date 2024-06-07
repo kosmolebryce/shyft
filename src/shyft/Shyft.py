@@ -1,10 +1,10 @@
+import configparser
 import datetime
 import json
+import multiprocessing
 import os
 import threading
 import time
-import configparser
-
 import tkinter as tk
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,22 +15,23 @@ Shyft (v0.1.0)
 > a shift-logging application designed to help contractors track and manage their service records
 """
 
-# ENVIRONMENT
-HOME = Path.home()
-APPS_DATA_DIR = HOME / "app_data"
-if not APPS_DATA_DIR.exists():
-    APPS_DATA_DIR.mkdir(parents=True, exist_ok=True)
-SHYFT_DATA_DIR = APPS_DATA_DIR / "shyft"
-if not SHYFT_DATA_DIR.exists():
-    SHYFT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-LOGS_DIR = SHYFT_DATA_DIR / "logs"
-if not LOGS_DIR.exists():
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# macOS application support directory
+APP_SUPPORT_DIR = Path(os.path.expanduser('~/Library/Application Support/Shyft'))
+APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Data file path
+DATA_FILE_PATH = APP_SUPPORT_DIR / 'data.json'
+
+# Logs directory
+LOGS_DIR = APP_SUPPORT_DIR / 'logs'
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 DEFAULT_SHIFT_STRUCTURE = {
     "Date": "",
-    "Project ID": "",
     "Model ID": "",
+    "Project ID": "", 
     "In (hh:mm)": "",
     "Out (hh:mm)": "",
     "Duration (hrs)": "",
@@ -38,20 +39,45 @@ DEFAULT_SHIFT_STRUCTURE = {
     "Gross pay": "",
 }
 
-CONFIG_FILE = SHYFT_DATA_DIR / "config.ini"
+CONFIG_FILE = APP_SUPPORT_DIR / "config.ini"
+
+"""
+Helper functions
+"""
+def format_to_two_decimals(value):
+    try:
+        # Convert the value to a float
+        float_value = float(value)
+        # Format the float with two decimal places
+        formatted_value = "{:.2f}".format(float_value)
+        return formatted_value
+    except ValueError:
+        # If the input is not a valid number, return the original value
+        return value
+        
+
+def close_current_window(event):
+    widget = event.widget
+    if isinstance(widget, tk.Toplevel):
+        widget.destroy()
+    else:
+        toplevel = widget.winfo_toplevel()
+        if isinstance(toplevel, tk.Toplevel):
+            toplevel.destroy()
 
 
+"""
+Autologger timer
+"""
 class TimerWindow:
     def __init__(self, root, time_color="#A78C7B", bg_color="#FFBE98"):
         self.root = root
         self.root.title("Timer")
         self.root.geometry("140x70")  # Set the desired size of the timer window
         self.root.configure(bg=bg_color)  # Set background color of the root frame
-        self.root.attributes("-topmost", True)
         self.elapsed_time = timedelta(0)
         self.running = False
         self.last_time = None
-
         self.time_color = time_color
         self.bg_color = bg_color
 
@@ -138,16 +164,24 @@ class TimerWindow:
         self.elapsed_time = timedelta(0)
         self.timer_label.config(text="00:00:00")
 
+
     def update_timer(self):
         while True:
-            if self.running:
-                current_time = datetime.now()
-                delta = current_time - self.last_time
-                elapsed = self.elapsed_time + delta
-                self.timer_label.config(text=str(elapsed).split(".")[0].rjust(8, "0"))
-            time.sleep(0.1)
+            try:
+                if self.running and self.timer_label.winfo_exists():
+                    current_time = datetime.now()
+                    delta = current_time - self.last_time
+                    elapsed = self.elapsed_time + delta
+                    self.root.after(0, lambda: self.timer_label.config(text=str(elapsed).split(".")[0].rjust(8, "0")))
+                time.sleep(0.1)
+            except tk.TclError as e:
+                print(f"Error updating label: {e}")
+                break  # Exit the loop if the widget is invalid
 
 
+"""
+Main GUI class
+"""
 class ShyftGUI:
     def __init__(self, root):
         self.root = root
@@ -155,19 +189,34 @@ class ShyftGUI:
         self.time_color = "#A78C7B"
         self.bg_color = "#FFBE98"
         self.btn_text_color = "#A78C7B"
+        self.data_file_path = DATA_FILE_PATH
         self.root.configure(bg=self.bg_color)
         self.config = configparser.ConfigParser()
         self.selected_theme = "aqua"  # Initialize selected_theme
         self.load_config()  # Load theme from config file
         self.configure_styles()
-        self.data_file_path = SHYFT_DATA_DIR / "data.json"
         self.data = {}
-        self.load_data()
         self.create_widgets()
         self.refresh_view()
         self.timer_window = None
         self.root.resizable(True, False)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    def toggle_timer_topmost(self):
+        if self.timer_window:
+            current_topmost_state = self.timer_window.root.attributes("-topmost")
+            new_topmost_state = not current_topmost_state
+            self.timer_window.root.attributes("-topmost", new_topmost_state)
+
+        # Update the config.ini file
+        self.config.set("Theme", "timer_topmost", str(new_topmost_state))
+        with open(CONFIG_FILE, "w") as config_file:
+            self.config.write(config_file)
+
+    def on_close(self):
+        self.running = False  # Stop any running processes like the timer
+        self.root.destroy()   # Safely close the window
+                        
     def configure_styles(self):
         self.style = ttk.Style(self.root)
         self.update_styles()
@@ -181,31 +230,33 @@ class ShyftGUI:
             self.config.set("Theme", "selected", self.selected_theme)
         else:
             self.selected_theme = self.config.get("Theme", "selected")
+        if not self.config.has_option("Theme", "timer_topmost"):
+                self.config.set("Theme", "timer_topmost", "False")
 
     def update_styles(self):
+        # self.style.configure(
+        #     "TButton",
+        #     # foreground="#F1B18B",
+        #     font=("Helvetica", 12, "bold"),
+        # )
+        # self.style.configure(
+        #     "TLabel",
+        #     # foreground="black",
+        #     # background="white",
+        #     font=("Helvetica", 12, "bold"),
+        # )
         self.style.configure(
-            "TButton",
-            foreground="#F1B18B",
-            font=("Helvetica", 12),
+            "TEntry", background="white"
         )
-        self.style.configure(
-            "TLabel",
-            # foreground="black",
-            # background="white",
-            font=("Helvetica", 12, "bold"),
-        )
-        self.style.configure(
-            "TEntry", foreground="black", background="white", font=("Helvetica", 12)
-        )
-        self.style.configure(
-            "Treeview", background="white", fieldbackground="white", foreground="black"
-        )
-        self.style.configure(
-            "Treeview.Heading",
-            font=("Helvetica", 10, "bold"),
-            foreground="black",
-            background="#ccc",
-        )
+        # self.style.configure(
+        #     "Treeview", background="white", fieldbackground="white", foreground="black"
+        # )
+        # self.style.configure(
+        #     "Treeview.Heading",
+        #     font=("Helvetica", 10, "bold"),
+        #     foreground="black",
+        #     background="#ccc",
+        # )
         self.style.map(
             "Treeview",
             background=[("selected", "#FFBE98")],
@@ -216,6 +267,9 @@ class ShyftGUI:
         )
 
     def load_data(self):
+        current_working_directory = os.getcwd()
+        if current_working_directory != APP_SUPPORT_DIR:
+            os.chdir(APP_SUPPORT_DIR)
         try:
             if self.data_file_path.exists():
                 with self.data_file_path.open("r") as f:
@@ -236,6 +290,9 @@ class ShyftGUI:
             self.data = {}
 
     def save_data(self):
+        current_working_directory = os.getcwd()
+        if current_working_directory != APP_SUPPORT_DIR:
+            os.chdir(APP_SUPPORT_DIR)
         try:
             with self.data_file_path.open("w") as f:
                 json.dump({"data": self.data}, f, indent=4)
@@ -251,8 +308,8 @@ class ShyftGUI:
             columns=(
                 "ID",
                 "Date",
-                "Project ID",
                 "Model ID",
+                "Project ID",
                 "In (hh:mm)",
                 "Out (hh:mm)",
                 "Duration (hrs)",
@@ -266,7 +323,7 @@ class ShyftGUI:
             self.tree.column(col, anchor="w", width=100)
         self.tree.pack(expand=True, fill="both")
 
-        button_frame = ttk.Frame(self.root, style="BW.TFrame")
+        button_frame = ttk.Frame(self.root, style="TFrame")
         button_frame.pack(side="bottom", fill="both", expand=True)
 
         ttk.Button(
@@ -305,6 +362,7 @@ class ShyftGUI:
             button_frame, text="Settings", command=self.open_settings, style="TButton"
         ).pack(side="left", expand=True)
 
+
     def refresh_view(self):
         self.load_data()
         self.populate_tree()
@@ -320,8 +378,8 @@ class ShyftGUI:
                 values=(
                     id,
                     shift.get("Date", "N/A"),
-                    shift.get("Project ID", "N/A"),
                     shift.get("Model ID", "N/A"),
+                    shift.get("Project ID", "N/A"),
                     shift.get("In (hh:mm)", "N/A"),
                     shift.get("Out (hh:mm)", "N/A"),
                     shift.get("Duration (hrs)", "N/A"),
@@ -330,7 +388,7 @@ class ShyftGUI:
                 ),
             )
 
-    def calculate_totals(self):
+    def calculate_totals(self, event=None):
         number_of_shifts = len(self.data.values())
         total_hours_worked = sum(
             float(shift["Duration (hrs)"]) for shift in self.data.values()
@@ -342,6 +400,8 @@ class ShyftGUI:
         # Display these totals in a pop-up window or directly on the GUI
         totals_window = tk.Toplevel(self.root)
         totals_window.title("Totals")
+        totals_window.bind("<Command-w>", close_current_window)
+        totals_window.bind("<Command-W>", close_current_window)
 
         columns = ("Description", "Value")
         totals_tree = ttk.Treeview(totals_window, columns=columns, show="headings")
@@ -365,11 +425,14 @@ class ShyftGUI:
             "", "end", values=("Estimated Net Income", f"${net_income:.2f}")
         )
 
-    def view_logs(self):
+    def view_logs(self, event=None):
         os.chdir(LOGS_DIR)
         log_window = tk.Toplevel(self.root)
         log_window.title("View Logs")
         log_window.geometry("480x640")
+        log_window.bind("<Command-w>", close_current_window)
+        log_window.bind("<Command-W>", close_current_window)
+        
 
         # Create a frame for the TreeView
         tree_frame = ttk.Frame(log_window)
@@ -422,86 +485,16 @@ class ShyftGUI:
 
         log_tree.bind("<<TreeviewSelect>>", on_log_selection)
 
-    def manual_entry(self):
-        window = tk.Toplevel(self.root)
-        window.title("Manual Shift Entry")
-        entries = {}
-        fields = [
-            "Date",
-            "Project ID",
-            "Model ID",
-            "In (hh:mm)",
-            "Out (hh:mm)",
-            "Hourly rate",
-        ]
-        uppercase_fields = ["Project ID", "Model ID"]  # Fields to convert to uppercase
 
-        for field in fields:
-            row = ttk.Frame(window, style="TFrame")
-            label = ttk.Label(row, width=15, text=field, anchor="w", style="TLabel")
-            entry_var = tk.StringVar()
-            entry = ttk.Entry(row, textvariable=entry_var, style="TEntry")
-            if field in uppercase_fields:
-                entry_var.trace_add(
-                    "write", lambda *_, var=entry_var: var.set(var.get().upper())
-                )
-            row.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-            label.pack(side=tk.LEFT)
-            entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-            entries[field] = entry
+    def validate_time_format(self, time_str):
+        """Check if the time string is in HH:MM format."""
+        try:
+            datetime.strptime(time_str, "%H:%M")
+        except ValueError:
+            raise ValueError("Invalid time format. Use HH:MM format.")
 
-        # Button Frame
-        button_frame = ttk.Frame(window, style="TFrame")
-        button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
 
-        cancel_button = ttk.Button(
-            button_frame, text="Cancel", command=window.destroy, style="TButton"
-        )
-        cancel_button.pack(side=tk.LEFT, padx=5)
-
-        submit_button = ttk.Button(
-            button_frame,
-            text="Submit",
-            command=lambda: submit_action(self, root=window),
-            style="TButton",
-        )
-        submit_button.pack(side=tk.RIGHT, padx=5)
-
-        def submit_action():
-            try:
-                # Validate time format for StartTime and EndTime
-                validate_time_format(entries["In (hh:mm)"].get())
-                validate_time_format(entries["Out (hh:mm)"].get())
-
-                new_data = {field: entries[field].get() for field in fields}
-                if any(v == "" for v in new_data.values()):
-                    messagebox.showerror("Error", "All fields must be filled out.")
-                    return
-
-                # Generate a new ID and format it
-                new_id = max([int(x) for x in self.data.keys()], default=0) + 1
-                formatted_id = self.format_id(new_id)  # Format the new ID
-
-                # Calculate duration based on 'StartTime' and 'EndTime'
-                duration_hrs = calculate_duration(
-                    new_data["In (hh:mm)"], new_data["Out (hh:mm)"]
-                )
-                new_data["Duration (hrs)"] = "{:.2f}".format(duration_hrs)
-                gross_pay = float(new_data["Hourly rate"]) * duration_hrs
-                new_data["Gross pay"] = "{:.2f}".format(gross_pay)
-
-                lock = threading.Lock()
-                with lock:
-                    self.data[formatted_id] = new_data
-                    self.save_data()
-                self.root.after(0, self.populate_tree)
-                window.destroy()
-                messagebox.showinfo("Success", "Shift logged successfully.")
-            except ValueError as e:
-                messagebox.showerror("Error", str(e))
-            self.refresh_view()
-
-        def calculate_duration(start, end):
+    def calculate_duration(self, start, end):
             """Calculate the duration in hours between two HH:MM formatted times."""
             try:
                 start_dt = datetime.strptime(start, "%H:%M")
@@ -514,53 +507,82 @@ class ShyftGUI:
             except ValueError:
                 raise ValueError("Invalid time format. Use HH:MM format.")
 
-        def validate_time_format(time_str):
-            """Check if the time string is in HH:MM format."""
+
+    def submit_action(self):
+        try:
+            # Validate time format for StartTime and EndTime
+            self.validate_time_format(self.entries["In (hh:mm)"].get())
+            self.validate_time_format(self.entries["Out (hh:mm)"].get())
+
+            new_data = {field: self.entries[field].get() for field in self.fields}
+            if any(v == "" for v in new_data.values()):
+                messagebox.showerror("Error", "All fields must be filled out.")
+                return
+
+            # Generate a new ID and format it
+            new_id = max([int(x) for x in self.data.keys()], default=0) + 1
+            formatted_id = self.format_id(new_id)  # Format the new ID
+
+            # Calculate duration based on 'StartTime' and 'EndTime'
+            duration_hrs = self.calculate_duration(
+                new_data["In (hh:mm)"], new_data["Out (hh:mm)"]
+            )
+            new_data["Duration (hrs)"] = "{:.2f}".format(duration_hrs)
+
+            # Convert "Hourly rate" to a float with two decimal places
             try:
-                datetime.strptime(time_str, "%H:%M")
+                hourly_rate = float(new_data["Hourly rate"])
+                new_data["Hourly rate"] = "{:.2f}".format(hourly_rate)
             except ValueError:
-                raise ValueError("Invalid time format. Use HH:MM format.")
+                messagebox.showerror("Error", "Invalid input for 'Hourly rate'. Please enter a numerical value.")
+                return
 
-    def edit_shift(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showerror("Error", "Please select a shift to edit.")
-            return
-        selected_id = selected_item[0]
-        shift = self.data.get(selected_id)
+            gross_pay = hourly_rate * duration_hrs
+            new_data["Gross pay"] = "{:.2f}".format(gross_pay)
 
+            lock = threading.Lock()
+            with lock:
+                self.data[formatted_id] = new_data
+                self.save_data()
+            self.root.after(0, self.populate_tree)
+            self.entries["window"].destroy()
+            messagebox.showinfo("Success", "Shift logged successfully.")
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+        self.refresh_view()
+
+
+    def manual_entry(self, event=None):
         window = tk.Toplevel(self.root)
-        window.title("Edit Shift")
-        entries = {}
-        fields = [
+        window.title("Manual Shift Entry")
+        window.bind("<Command-w>", close_current_window)
+        window.bind("<Command-W>", close_current_window)
+        self.entries = {}
+        self.fields = [
             "Date",
-            "Project ID",
             "Model ID",
+            "Project ID",
             "In (hh:mm)",
             "Out (hh:mm)",
-            "Duration (hrs)",
-            "Hourly rate",
-            "Gross pay",
-        ]
+            "Hourly rate"
+            ]
         uppercase_fields = ["Project ID", "Model ID"]  # Fields to convert to uppercase
 
-        # First, create all entries without the uppercase transformation
-        for field in fields:
+        for field in self.fields:
             row = ttk.Frame(window, style="TFrame")
             label = ttk.Label(row, width=15, text=field, anchor="w", style="TLabel")
-            entry_var = tk.StringVar(value=shift.get(field, ""))
+            entry_var = tk.StringVar()
             entry = ttk.Entry(row, textvariable=entry_var, style="TEntry")
+            if field in uppercase_fields:
+                entry_var.trace_add(
+                    "write", lambda *_, var=entry_var: var.set(var.get().upper())
+                )
             row.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
             label.pack(side=tk.LEFT)
             entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
-            entries[field] = entry_var  # Store the StringVar, not the Entry widget
+            self.entries[field] = entry
 
-        # Apply uppercase transformation where necessary
-        for field in uppercase_fields:
-            entry_var = entries[field]
-            entry_var.trace_add(
-                "write", lambda *args, var=entry_var: var.set(var.get().upper())
-            )
+        self.entries["window"] = window  # Store the window reference
 
         # Button Frame
         button_frame = ttk.Frame(window, style="TFrame")
@@ -572,31 +594,105 @@ class ShyftGUI:
         cancel_button.pack(side=tk.LEFT, padx=5)
 
         submit_button = ttk.Button(
-            button_frame,
-            text="Submit",
-            command=lambda: submit_action(self, root=window),
-            style="TButton",
+            button_frame, text="Submit", command=self.submit_action, style="TButton"
         )
         submit_button.pack(side=tk.RIGHT, padx=5)
 
-        def submit_action(self, root):
+
+    def edit_shift(self, event=None):
+        selected_item = self.tree.selection()
+        if not selected_item:
+            messagebox.showerror("Error", "Please select a shift to edit.")
+            return
+        selected_id = selected_item[0]
+        shift = self.data.get(selected_id)
+    
+        window = tk.Toplevel(self.root)
+        window.title("Edit Shift")
+        window.bind("<Command-w>", close_current_window)
+        window.bind("<Command-W>", close_current_window)
+        entries = {}
+        fields = [
+            "Date",
+            "Model ID",
+            "Project ID",
+            "In (hh:mm)",
+            "Out (hh:mm)",
+            "Duration (hrs)",
+            "Hourly rate",
+            "Gross pay",
+        ]
+        uppercase_fields = ["Project ID", "Model ID"]  # Fields to convert to uppercase
+    
+        # Create all entries without the uppercase transformation
+        for field in fields:
+            row = ttk.Frame(window, style="TFrame")
+            label = ttk.Label(row, width=15, text=field, anchor="w", style="TLabel")
+            entry_var = tk.StringVar(value=str(shift.get(field, "")))
+            entry = ttk.Entry(row, textvariable=entry_var, style="TEntry")
+            row.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+            label.pack(side=tk.LEFT)
+            entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
+            entries[field] = entry_var  # Store the StringVar, not the Entry widget
+    
+        # Apply uppercase transformation where necessary
+        for field in uppercase_fields:
+            entry_var = entries[field]
+            entry_var.trace_add(
+                "write", lambda *args, var=entry_var: var.set(var.get().upper())
+            )
+    
+        # Button Frame
+        button_frame = ttk.Frame(window, style="TFrame")
+        button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+    
+        cancel_button = ttk.Button(
+            button_frame, text="Cancel", command=window.destroy, style="TButton"
+        )
+        cancel_button.pack(side=tk.LEFT, padx=5)
+    
+        submit_button = ttk.Button(
+            button_frame,
+            text="Submit",
+            command=lambda: submit_action(self, window, entries, fields),
+            style="TButton",
+        )
+        submit_button.pack(side=tk.RIGHT, padx=5)
+    
+        def submit_action(self, root, entries, fields):
             try:
                 updated_data = {field: entries[field].get() for field in fields}
                 if any(v == "" for v in updated_data.values()):
                     messagebox.showerror("Error", "All fields must be filled out.")
                     return
+                
+                # Format monetary values to two decimal places
+                updated_data["Hourly rate"] = f"{float(updated_data['Hourly rate']):.2f}"
+                updated_data["Gross pay"] = f"{float(updated_data['Gross pay']):.2f}"
+        
                 lock = threading.Lock()
                 with lock:
-                    self.data[selected_id] = updated_data
-                    self.save_data()
-                self.root.after(0, self.populate_tree)
-                window.destroy()
-            except Exception as e:
-                messagebox.showerror(
-                    "Error", "Failed to update shift. Error: " + str(e)
+                    self.data[selected_id] = updated_data  # Use selected_id to keep the same shift ID
+        
+                save_thread = threading.Thread(
+                    target=lambda: self.save_and_update_view(root)
                 )
+                save_thread.start()
+                root.destroy()
+                messagebox.showinfo("Success", "Data updated successfully.")
+            except Exception as e:
+                messagebox.showerror("Error", "Failed to update shift. Error: " + str(e))
+                
+        
+    def save_and_update_view(self, window):
+        try:
+            self.save_data()
+            self.root.after(0, self.populate_tree)
+            window.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", "Failed to save and update view. Error: " + str(e))
 
-    def delete_shift(self):
+    def delete_shift(self, event=None):
         selected_item = self.tree.selection()
         if not selected_item:
             messagebox.showerror("Error", "Please select a shift to delete.")
@@ -627,6 +723,8 @@ class ShyftGUI:
     def open_settings(self):
         settings_window = tk.Toplevel(self.root)
         settings_window.title("Settings")
+        settings_window.bind("<Command-w>", close_current_window)
+        settings_window.bind("<Command-W>", close_current_window)
 
         def choose_color(variable, button):
             color_code = colorchooser.askcolor(title="Choose Color")[1]
@@ -640,12 +738,17 @@ class ShyftGUI:
 
         settings_frame = ttk.Frame(settings_window, style="TFrame")
         settings_frame.pack(
-            padx=5, pady=5, ipadx=5, ipady=5, expand=tk.YES, fill=tk.BOTH
+           side=tk.BOTTOM, 
+           padx=5,
+           ipadx=5,
+           ipady=1,
+           expand=tk.YES, 
+           fill=tk.BOTH
         )
 
         time_color_button = ttk.Button(
             settings_frame,
-            text="Timestring Color",
+            text="Stopclock Timestring Color",
             command=lambda: choose_color(time_color_var, time_color_button),
             style="TButton",
         )
@@ -653,7 +756,7 @@ class ShyftGUI:
 
         bg_color_button = ttk.Button(
             settings_frame,
-            text="Background Color",
+            text="Stopclock Background Color",
             command=lambda: choose_color(bg_color_var, bg_color_button),
             style="TButton",
         )
@@ -661,7 +764,7 @@ class ShyftGUI:
 
         btn_text_color_button = ttk.Button(
             settings_frame,
-            text="Button Text Color",
+            text="Stopclock Button Text Color",
             command=lambda: choose_color(btn_text_color_var, btn_text_color_button),
             style="TButton",
         )
@@ -685,7 +788,7 @@ class ShyftGUI:
             style="TButton",
         ).pack(pady=1, fill="x")
 
-    def autologger(self):
+    def autologger(self, event=None):
         model_id_response = simpledialog.askstring(
             "Model ID", "Enter Model ID", parent=self.root
         )
@@ -731,16 +834,14 @@ class ShyftGUI:
             divider = "═" * 64 + "\n"
             text.insert(tk.INSERT, divider)
 
-        # Start the timer when the notes window is opened
-        if self.timer_window is None or not tk.Toplevel.winfo_exists(
-            self.timer_window.root
-        ):
+        # Start the timer when the notes window is opened, loading its "topmost" state from `config.ini`
+        if self.timer_window is None or not tk.Toplevel.winfo_exists(self.timer_window.root):
             timer_window = tk.Toplevel(self.root)
-            self.timer_window = TimerWindow(
-                timer_window, time_color=self.time_color, bg_color=self.bg_color
-            )
+            self.timer_window = TimerWindow(timer_window, time_color=self.time_color, bg_color=self.bg_color)
             self.timer_window.start()
-
+            topmost_state = self.config.getboolean("Theme", "timer_topmost")
+            self.timer_window.root.attributes("-topmost", topmost_state)
+            
         # Define the action for submitting notes
         def submit_notes():
             if self.timer_window:
@@ -768,8 +869,8 @@ class ShyftGUI:
                 with lock:
                     self.data[formatted_id] = {
                         "Date": datetime.now().strftime("%Y-%m-%d"),
-                        "Project ID": project_id,
                         "Model ID": model_id,
+                        "Project ID": project_id,
                         "In (hh:mm)": (datetime.now() - elapsed_time).strftime("%H:%M"),
                         "Out (hh:mm)": datetime.now().strftime("%H:%M"),
                         "Duration (hrs)": f"{duration_hrs:.2f}",
@@ -795,7 +896,7 @@ class ShyftGUI:
         Button(
             button_frame,
             text="Cancel",
-            command=notes_window.destroy,
+            command=lambda: [notes_window.destroy(), self.timer_window.root.destroy()],
             bg=self.btn_text_color,
             fg="black",
         ).pack(side=tk.LEFT, padx=5, pady=5)
@@ -813,7 +914,13 @@ class ShyftGUI:
 
     def change_theme(self, theme_name):
         self.style.theme_use(theme_name)
-
+    
+        # Update the config file
+        self.config.set("Theme", "selected", theme_name)
+        with open(CONFIG_FILE, 'w') as config_file:
+            self.config.write(config_file)
+        print(f"Theme selection <{theme_name}> saved to `config.ini`.")
+                                    
     def setup_menu(self):
         # Create a menu bar
         menu_bar = tk.Menu(self.root)
@@ -823,23 +930,43 @@ class ShyftGUI:
         theme_menu.add_command(
             label="Default", command=lambda: self.change_theme("default")
         )
+        theme_menu.add_command(label="Classic", command=lambda: self.change_theme("classic"))
         theme_menu.add_command(label="Alt", command=lambda: self.change_theme("alt"))
         theme_menu.add_command(label="Clam", command=lambda: self.change_theme("clam"))
         theme_menu.add_command(label="Aqua", command=lambda: self.change_theme("aqua"))
+        
+        # Create a View menu
+        view_menu = tk.Menu(menu_bar, tearoff=0)
+        view_menu.add_checkbutton(label="Timer Always on Top", command=self.toggle_timer_topmost)
 
         # Add the Theme menu to the menu bar
         menu_bar.add_cascade(label="Theme", menu=theme_menu)
-
+        
+        # Add the View menu to the menu bar
+        menu_bar.add_cascade(label="View", menu=view_menu)
+        
         # Configure the root window to use the menu bar
         self.root.config(menu=menu_bar)
 
 
-def main():
+def run_tkinter_app():
     root = tk.Tk()
+    style = ttk.Style()
     app = ShyftGUI(root)
     app.setup_menu()
-    app.refresh_view()
+    root.bind("<Command-a>", app.autologger)
+    root.bind("<Command-d>", app.delete_shift)
+    root.bind("<Command-e>", app.edit_shift)
+    root.bind("<Command-m>", app.manual_entry)
+    root.bind("<Command-l>", app.view_logs)
+    root.bind("<Command-t>", app.calculate_totals)
     root.mainloop()
+
+
+
+def main():
+    process = multiprocessing.Process(target=run_tkinter_app)
+    process.start()
 
 
 if __name__ == "__main__":
