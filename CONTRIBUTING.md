@@ -1,6 +1,6 @@
 # `CONTRIBUTING.md`
 
-## **OpenClaims**: Annotators Unite
+## **ENCLAIM**: Annotators Unite
 
 ### Introduction
 
