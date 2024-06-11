@@ -205,7 +205,10 @@ class ShyftGUI:
         self.data_file_path = DATA_FILE_PATH
         self.root.configure(bg=self.bg_color)
         self.config = configparser.ConfigParser()
-        self.selected_theme = "aqua"  # Initialize selected_theme
+        if platform.system() == "Darwin":
+            self.selected_theme = "aqua"  # Initialize selected_theme
+        else:
+            self.selected_theme = "default"
         self.timer_topmost = False  # Initialize timer_topmost
         self.timer_topmost_var = tk.BooleanVar(value=self.timer_topmost)
         self.load_config()  # Load theme and timer_topmost from config file
@@ -216,6 +219,8 @@ class ShyftGUI:
         self.timer_window = None
         self.root.resizable(True, False)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # Create a menu bar
+        self.menu_bar = tk.Menu(self.root)
 
         # Bind Command and Control keys for hiding and minimizing the window
         # self.root.bind_all(f"<{modifier_key}-h>", hide_window)
@@ -711,6 +716,7 @@ class ShyftGUI:
                 self.timer_window.root.destroy()
                 self.timer_window = None
                 self.disable_topmost_menu()
+                self.enable_theme_menu()
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to log shift: {str(e)}")
@@ -784,6 +790,7 @@ class ShyftGUI:
         ).pack(pady=1, fill="x")
 
     def autologger(self, event=None):
+        self.disable_theme_menu()
         model_id_response = simpledialog.askstring(
             "Model ID", "Enter Model ID", parent=self.root
         )
@@ -837,6 +844,7 @@ class ShyftGUI:
             topmost_state = self.config.getboolean("Theme", "timer_topmost")
             self.timer_window.root.attributes("-topmost", topmost_state)
             self.enable_topmost_menu()
+            self.disable_theme_menu()
             self.timer_window.root.bind_all(f"<{modifier_key}-F>", self.toggle_timer_topmost)
             self.timer_window.root.bind_all(f"<{modifier_key}-f>", self.toggle_timer_topmost)
 
@@ -862,9 +870,6 @@ class ShyftGUI:
                 with open(log_file_path, "w") as file:
                     file.write(text.get("1.0", tk.END))
 
-                lock = threading.Lock()
-
-                with lock:
                     self.data[formatted_id] = {
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "Model ID": model_id,
@@ -875,10 +880,7 @@ class ShyftGUI:
                         "Hourly rate": f"{hourly_rate:.2f}",
                         "Gross pay": f"{gross_pay:.2f}",
                     }
-                    save_thread = threading.Thread(
-                        target=lambda: self.save_data_and_update_view(notes_window)
-                    )
-                    save_thread.start()
+                    self.save_data_and_update_view(notes_window)
                 messagebox.showinfo("Success", "Shift logged successfully.")
             else:
                 messagebox.showerror("Error", "Timer is not running.")
@@ -920,12 +922,11 @@ class ShyftGUI:
 
     def change_theme(self, theme_name):
         self.style.theme_use(theme_name)
-
         # Update the config file
         self.config.set("Theme", "selected", theme_name)
-        with open(CONFIG_FILE, 'w') as config_file:
+        with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
-        print(f"Theme selection <{theme_name}> saved to `config.ini`.")
+                
 
     def enable_topmost_menu(self):
         self.view_menu.entryconfig("Timer Always on Top", state="normal")
@@ -933,33 +934,39 @@ class ShyftGUI:
     def disable_topmost_menu(self):
         self.view_menu.entryconfig("Timer Always on Top", state="disabled")
 
-    def setup_menu(self):
-        # Create a menu bar
-        menu_bar = tk.Menu(self.root)
+    def disable_theme_menu(self):
+        self.menu_bar.entryconfig("Theme", state="disabled")
 
+    def enable_theme_menu(self):
+        self.menu_bar.entryconfig("Theme", state="normal")
+
+
+    def setup_menu(self):
         # Create a Theme menu
-        theme_menu = tk.Menu(menu_bar, tearoff=0)
-        theme_menu.add_command(
+        self.theme_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.theme_menu.add_command(
             label="Default", command=lambda: self.change_theme("default")
         )
-        theme_menu.add_command(label="Classic", command=lambda: self.change_theme("classic"))
-        theme_menu.add_command(label="Alt", command=lambda: self.change_theme("alt"))
-        theme_menu.add_command(label="Clam", command=lambda: self.change_theme("clam"))
-        theme_menu.add_command(label="Aqua", command=lambda: self.change_theme("aqua"))
+        self.theme_menu.add_command(label="Classic", command=lambda: self.change_theme("classic"))
+        self.theme_menu.add_command(label="Alt", command=lambda: self.change_theme("alt"))
+        self.theme_menu.add_command(label="Clam", command=lambda: self.change_theme("clam"))
+        if platform.system() == "Darwin":
+            self.theme_menu.add_command(label="Aqua", command=lambda: self.change_theme("aqua"))
 
         # Create a View menu
-        self.view_menu = tk.Menu(menu_bar, tearoff=0)
+        self.view_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.view_menu.add_checkbutton(label="Timer Always on Top", command=self.toggle_timer_topmost, variable=self.timer_topmost_var)
         self.disable_topmost_menu()  # Disable initially since there is no timer window
 
         # Add the Theme menu to the menu bar
-        menu_bar.add_cascade(label="Theme", menu=theme_menu)
+        self.menu_bar.add_cascade(label="Theme", menu=self.theme_menu)
+        self.enable_theme_menu()
 
         # Add the View menu to the menu bar
-        menu_bar.add_cascade(label="View", menu=self.view_menu)
+        self.menu_bar.add_cascade(label="View", menu=self.view_menu)
 
         # Configure the root window to use the menu bar
-        self.root.config(menu=menu_bar)
+        self.root.config(menu=self.menu_bar)
 
 
 def run_tkinter_app():
@@ -987,4 +994,5 @@ def main():
     process.start()
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()
