@@ -11,8 +11,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import ttk, messagebox, simpledialog, Text, Button, colorchooser
 
-# macOS application support directory
-APP_SUPPORT_DIR = Path(os.path.expanduser('~/Library/Application Support/Shyft'))
+"""
+Shyft (v0.1.0)
+> a shift-logging application designed to help contractors track and manage their service records
+"""
+
+# Set `APP_SUPPORT_DIR` depending on OS
+if platform.system() == "Darwin":
+    APP_SUPPORT_DIR = Path(os.path.expanduser('~/Library/Application Support/Shyft'))
+elif platform.system() == "Windows":
+    APP_SUPPORT_DIR = Path("C:\\ProgramData\\Shyft")
+else:
+    APP_SUPPORT_DIR = Path(os.path.expanduser('~/.shyft'))
+
 APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Data file path
@@ -21,6 +32,7 @@ DATA_FILE_PATH = APP_SUPPORT_DIR / 'data.json'
 # Logs directory
 LOGS_DIR = APP_SUPPORT_DIR / 'logs'
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 DEFAULT_SHIFT_STRUCTURE = {
     "Date": "",
@@ -35,15 +47,17 @@ DEFAULT_SHIFT_STRUCTURE = {
 
 CONFIG_FILE = APP_SUPPORT_DIR / "config.ini"
 
+
+"""
+Helper functions
+"""
 def get_modifier_key(event):
     if platform.system() == "Darwin":
         return "Command"
     else:
         return "Control"
-
 modifier_key = get_modifier_key(event=None)
 
-# Helper functions
 def format_to_two_decimals(value):
     try:
         float_value = float(value)
@@ -75,12 +89,20 @@ def minimize_window(event=None):
 #         window.pack()
 
 
-# Autologger timer
+"""
+Autologger timer
+"""
 class TimerWindow:
     def __init__(self, root, time_color="#A78C7B", bg_color="#FFBE98"):
         self.root = root
         self.root.title("Timer")
-        self.root.geometry("140x70")  # Set the desired size of the timer window
+        """
+        Dynamically set the dimensions of the timer window based on system name
+        """
+        if platform.system() == "Darwin":
+            self.root.geometry("140x70")
+        else:
+            self.root.geometry("200x85")
         self.root.configure(bg=bg_color)  # Set background color of the root frame
         self.elapsed_time = timedelta(0)
         self.running = False
@@ -92,7 +114,11 @@ class TimerWindow:
         self.timer_label = tk.Label(
             self.root,
             text="00:00:00",
-            font=("Helvetica Neue", 32, "bold"),  # Adjust font to use monospaced variant
+            font=(
+                "Helvetica Neue",
+                32,
+                "bold",
+            ),  # Adjust font to use monospaced variant
             fg=self.time_color,
             bg=self.bg_color,
         )
@@ -103,17 +129,17 @@ class TimerWindow:
         button_frame.pack(fill="x", pady=0)
 
         button_font = ("Helvetica", 10)
-
         self.start_button = tk.Button(
             button_frame,
             text="Start",
             command=self.start,
             bg=self.bg_color,
-            fg="#A78C7B",
-            highlightbackground=self.bg_color,
-            highlightthickness=0,
-            bd=0,
-            font=button_font,
+            fg=self.time_color,
+            # highlightbackground=self.bg_color,
+            # highlightthickness=0,
+            # bd=0,
+            # font=button_font,
+            # relief="raised",
         )
         self.start_button.grid(row=0, column=0, sticky="ew", padx=2)
 
@@ -122,11 +148,12 @@ class TimerWindow:
             text="Stop",
             command=self.stop,
             bg=self.bg_color,
-            fg="#A78C7B",
-            highlightbackground=self.bg_color,
-            highlightthickness=0,
-            bd=0,
-            font=button_font,
+            fg=self.time_color,
+            # highlightbackground=self.bg_color,
+            # highlightthickness=0,
+            # bd=0,
+            # font=button_font,
+            # relief="raised",
         )
         self.stop_button.grid(row=0, column=1, sticky="ew", padx=2)
 
@@ -135,14 +162,15 @@ class TimerWindow:
             text="Reset",
             command=self.reset,
             bg=self.bg_color,
-            fg="#A78C7B",
-            highlightbackground=self.bg_color,
-            highlightthickness=0,
-            bd=0,
-            font=button_font,
+            fg=self.time_color,
+           # highlightbackground=self.bg_color,
+           # highlightthickness=0,
+           # bd=0,
+           # font=button_font,
+           # relief="raised"
         )
         self.reset_button.grid(row=0, column=2, sticky="ew", padx=2)
-
+            
         # Configure grid to make buttons expand evenly
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
@@ -151,15 +179,6 @@ class TimerWindow:
         self.update_timer_thread = threading.Thread(target=self.update_timer)
         self.update_timer_thread.daemon = True
         self.update_timer_thread.start()
-
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
-
-        # Bind Command and Control keys for hiding and minimizing the window
-        # self.root.bind(f"<{modifier_key}-h>", hide_window)
-        self.root.bind(f"<{modifier_key}-m>", minimize_window)
-        # self.root.bind_all(f"<{modifier_key}-H>", hide_window)
-        self.root.bind_all(f"<{modifier_key}-M>", minimize_window)
-        # self.root.bind(f"<{modifier_key}-Shift-H>", show_hidden_window)
 
     def start(self):
         if not self.running:
@@ -176,6 +195,7 @@ class TimerWindow:
         self.elapsed_time = timedelta(0)
         self.timer_label.config(text="00:00:00")
 
+
     def update_timer(self):
         while True:
             try:
@@ -189,12 +209,10 @@ class TimerWindow:
                 print(f"Error updating label: {e}")
                 break  # Exit the loop if the widget is invalid
 
-    def on_close(self):
-        self.stop()
-        self.root.destroy()
 
-
-# Main GUI class
+"""
+Main GUI class
+"""
 class ShyftGUI:
     def __init__(self, root):
         self.root = root
@@ -229,24 +247,22 @@ class ShyftGUI:
         self.root.bind_all(f"<{modifier_key}-M>", minimize_window)
         # self.root.bind_all(f"<{modifier_key}-Shift-H>", show_hidden_window)
 
-    def toggle_timer_topmost(self, event):
-        if self.timer_window and self.timer_window.root.winfo_exists():
+    def toggle_timer_topmost(self):
+        if self.timer_window:
             current_topmost_state = self.timer_window.root.attributes("-topmost")
             new_topmost_state = not current_topmost_state
             self.timer_window.root.attributes("-topmost", new_topmost_state)
 
-            # Update the config.ini file
-            self.config.set("Theme", "timer_topmost", str(new_topmost_state))
-            with open(CONFIG_FILE, "w") as config_file:
-                self.config.write(config_file)
-
-            # Update the menu variable
-            self.timer_topmost_var.set(new_topmost_state)
+        # Update the config.ini file
+        self.config.set("Theme", "timer_topmost", str(new_topmost_state))
+        with open(CONFIG_FILE, "w") as config_file:
+            self.config.write(config_file)
+    
 
     def on_close(self):
         self.running = False  # Stop any running processes like the timer
         self.root.destroy()   # Safely close the window
-
+                        
     def configure_styles(self):
         self.style = ttk.Style(self.root)
         self.update_styles()
@@ -261,15 +277,40 @@ class ShyftGUI:
         else:
             self.selected_theme = self.config.get("Theme", "selected")
         if not self.config.has_option("Theme", "timer_topmost"):
-            self.config.set("Theme", "timer_topmost", "False")
-        else:
-            self.timer_topmost = self.config.getboolean("Theme", "timer_topmost")
-            self.timer_topmost_var.set(self.timer_topmost)  # Set the variable
+                self.config.set("Theme", "timer_topmost", "False")
 
     def update_styles(self):
-        self.style.configure("TEntry", background="white")
-        self.style.map("Treeview", background=[("selected", "#FFBE98")], foreground=[("selected", "black")])
-        self.style.configure("highlight.Treeview", background="#FFBE98", foreground="black")
+        # self.style.configure(
+        #     "TButton",
+        #     foreground="#F1B18B",
+        #     font=("Helvetica", 12, "bold"),
+        # )
+        # self.style.configure(
+        #     "TLabel",
+        #     foreground="black",
+        #     background="white",
+        #     font=("Helvetica", 12, "bold"),
+        # )
+        self.style.configure(
+            "TEntry", background="white"
+        )
+        self.style.configure(
+            "Treeview", background="white", fieldbackground="white", foreground="black"
+        )
+        self.style.configure(
+            "Treeview.Heading",
+            font=("Helvetica", 10, "bold"),
+            foreground="black",
+            background="#ccc",
+        )
+        self.style.map(
+            "Treeview",
+            background=[("selected", "#FFBE98")],
+            foreground=[("selected", "black")],
+        )
+        self.style.configure(
+            "highlight.Treeview", background="#FFBE98", foreground="black"
+        )
 
     def load_data(self):
         current_working_directory = os.getcwd()
@@ -367,6 +408,7 @@ class ShyftGUI:
             button_frame, text="Settings", command=self.open_settings, style="TButton"
         ).pack(side="left", expand=True)
 
+
     def refresh_view(self):
         self.load_data()
         self.populate_tree()
@@ -401,10 +443,10 @@ class ShyftGUI:
         tax_liability = total_gross_pay * 0.27
         net_income = total_gross_pay - tax_liability
 
-        # Display these 15 in a pop-up window or directly on the GUI
+        # Display these totals in a pop-up window or directly on the GUI
         totals_window = tk.Toplevel(self.root)
         totals_window.title("Totals")
-        totals_window.geometry("300x120")
+        totals_window.geometry("240x120")
         totals_window.bind(f"<{modifier_key}-w>", close_current_window)
         totals_window.bind(f"<{modifier_key}-W>", close_current_window)
 
@@ -412,8 +454,8 @@ class ShyftGUI:
         totals_tree = ttk.Treeview(totals_window, columns=columns, show="headings")
         totals_tree.heading("Description", text="Description", anchor="w")
         totals_tree.heading("Value", text="Value", anchor="w")
-        totals_tree.column("Description", anchor="w", width=200)
-        totals_tree.column("Value", anchor="e", width=100)
+        totals_tree.column("Description", anchor="w", width=180)
+        totals_tree.column("Value", anchor="e", width=60)
         totals_tree.pack(expand=True, fill="both")
 
         totals_tree.insert("", "end", values=("Shifts Worked", number_of_shifts))
@@ -430,26 +472,28 @@ class ShyftGUI:
             "", "end", values=("Estimated Net Income", f"${net_income:.2f}")
         )
 
+        totals_window.grab_set()
+        totals_window.wait_window()
+
     def view_logs(self, event=None):
         os.chdir(LOGS_DIR)
         log_window = tk.Toplevel(self.root)
         log_window.title("View Logs")
-        log_window.geometry("400x400")
-        log_window.bind(f"<{modifier_key}-w>", close_current_window)
-        log_window.bind(f"<{modifier_key}-W>", close_current_window)
+        log_window.geometry("480x640")
+        log_window.bind("<Command-w>", close_current_window)
+        log_window.bind("<Command-W>", close_current_window)
 
         # Create a frame for the TreeView
-        tree_frame = ttk.Frame(log_window, height=3)
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        tree_frame = ttk.Frame(log_window)
+        tree_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
 
         # Set up the TreeView
         log_tree = ttk.Treeview(
-            tree_frame, columns=["Log Files"], show="headings", style="Treeview",
-            height=3
+            tree_frame, columns=["Log Files"], show="headings", height=4  # Set height to 4 lines
         )
         log_tree.heading("Log Files", text="Log Files")
-        log_tree.column("Log Files", anchor="w", width=100)
-        log_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        log_tree.column("Log Files", anchor="w")
+        log_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Configure tag for selected items
         log_tree.tag_configure("highlight", background="#FFBE98")
@@ -458,7 +502,7 @@ class ShyftGUI:
         log_files = sorted(
             [
                 f
-                for f in LOGS_DIR.iterdir()
+                for f in os.scandir(LOGS_DIR)
                 if f.is_file() and not f.name.startswith(".")
             ],
             key=lambda x: x.name,
@@ -468,7 +512,7 @@ class ShyftGUI:
 
         # Create a frame for the Text widget to display the log content
         text_frame = ttk.Frame(log_window)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=2.5, pady=5)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
         text_widget = Text(text_frame, wrap="word")
         text_widget.pack(fill=tk.BOTH, expand=True)
 
@@ -490,12 +534,14 @@ class ShyftGUI:
 
         log_tree.bind("<<TreeviewSelect>>", on_log_selection)
 
+
     def validate_time_format(self, time_str):
         """Check if the time string is in HH:MM format."""
         try:
             datetime.strptime(time_str, "%H:%M")
         except ValueError:
             raise ValueError("Invalid time format. Use HH:MM format.")
+
 
     def calculate_duration(self, start, end):
         """Calculate the duration in hours between two HH:MM formatted times."""
@@ -509,6 +555,7 @@ class ShyftGUI:
             return duration
         except ValueError:
             raise ValueError("Invalid time format. Use HH:MM format.")
+
 
     def submit_action(self):
         try:
@@ -553,11 +600,14 @@ class ShyftGUI:
             messagebox.showerror("Error", str(e))
         self.refresh_view()
 
+
     def manual_entry(self, event=None):
         window = tk.Toplevel(self.root)
-        window.title("Manual Shift Entry")
+        window.title("Manual Entry")
+        # window.geometry("300x220")  # Set an appropriate size for the dialog
         window.bind(f"<{modifier_key}-w>", close_current_window)
         window.bind(f"<{modifier_key}-W>", close_current_window)
+
         self.entries = {}
         self.fields = [
             "Date",
@@ -571,7 +621,7 @@ class ShyftGUI:
 
         for field in self.fields:
             row = ttk.Frame(window, style="TFrame")
-            label = ttk.Label(row, width=15, text=field, anchor="w", style="TLabel")
+            label = ttk.Label(row, width=20, text=field, anchor="w", style="TLabel")
             entry_var = tk.StringVar()
             entry = ttk.Entry(row, textvariable=entry_var, style="TEntry")
             if field in uppercase_fields:
@@ -586,19 +636,24 @@ class ShyftGUI:
         self.entries["window"] = window  # Store the window reference
 
         # Button Frame
-        button_frame = ttk.Frame(window, style="TFrame")
-        button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+        # button_frame = ttk.Frame(window, style="TFrame")
+        # button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
 
         cancel_button = ttk.Button(
-            button_frame, text="Cancel", command=window.destroy, style="TButton"
+            window, text="Cancel", command=window.destroy, style="TButton"
         )
-        cancel_button.pack(side=tk.LEFT, padx=5)
+        cancel_button.pack(side=tk.LEFT, padx=5, expand=True)
 
         submit_button = ttk.Button(
-            button_frame, text="Submit", command=self.submit_action, style="TButton"
+            window, text="Submit", command=self.submit_action, style="TButton"
         )
-        submit_button.pack(side=tk.RIGHT, padx=5)
+        submit_button.pack(side=tk.RIGHT, padx=5, expand=True)
 
+        # Set focus to the first entry field
+        self.entries[self.fields[0]].focus_set
+
+        self.entries[self.fields[0]].focus_set()  
+        
     def edit_shift(self, event=None):
         selected_item = self.tree.selection()
         if not selected_item:
@@ -609,8 +664,10 @@ class ShyftGUI:
 
         window = tk.Toplevel(self.root)
         window.title("Edit Shift")
+        # window.geometry("300x250")  # Set an appropriate size for the dialog
         window.bind(f"<{modifier_key}-w>", close_current_window)
         window.bind(f"<{modifier_key}-W>", close_current_window)
+
         entries = {}
         fields = [
             "Date",
@@ -642,46 +699,48 @@ class ShyftGUI:
                 "write", lambda *args, var=entry_var: var.set(var.get().upper())
             )
 
-        # Button Frame
-        button_frame = ttk.Frame(window, style="TFrame")
-        button_frame.pack(side=tk.BOTTOM, padx=10, pady=10)
+        # Set focus to the first entry field
+        entries["Date"].trace_add("write", lambda *args: entries["Date"].set(entries["Date"].get().upper()))
 
+        # Buttons embedded in root window
         cancel_button = ttk.Button(
-            button_frame, text="Cancel", command=window.destroy, style="TButton"
+            window, text="Cancel", command=window.destroy, style="TButton"
         )
         cancel_button.pack(side=tk.LEFT, padx=5)
 
         submit_button = ttk.Button(
-            button_frame,
+            window,
             text="Submit",
-            command=lambda: submit_action(self, window, entries, fields),
+            command=lambda: self.submit_action_edit(window, entries, fields, selected_id),
             style="TButton",
         )
         submit_button.pack(side=tk.RIGHT, padx=5)
 
-        def submit_action(self, root, entries, fields):
-            try:
-                updated_data = {field: entries[field].get() for field in fields}
-                if any(v == "" for v in updated_data.values()):
-                    messagebox.showerror("Error", "All fields must be filled out.")
-                    return
+        entries["Date"].trace_add("write", lambda *args: entries["Date"].focus_set())
+                
+    def submit_action_edit(self, root, entries, fields, selected_id):
+        try:
+            updated_data = {field: entries[field].get() for field in fields}
+            if any(v == "" for v in updated_data.values()):
+                messagebox.showerror("Error", "All fields must be filled out.")
+                return
 
-                # Format monetary values to two decimal places
-                updated_data["Hourly rate"] = f"{float(updated_data['Hourly rate']):.2f}"
-                updated_data["Gross pay"] = f"{float(updated_data['Gross pay']):.2f}"
+            # Format monetary values to two decimal places
+            updated_data["Hourly rate"] = f"{float(updated_data['Hourly rate']):.2f}"
+            updated_data["Gross pay"] = f"{float(updated_data['Gross pay']):.2f}"
 
-                lock = threading.Lock()
-                with lock:
-                    self.data[selected_id] = updated_data  # Use selected_id to keep the same shift ID
+            lock = threading.Lock()
+            with lock:
+                self.data[selected_id] = updated_data  # Use selected_id to keep the same shift ID
 
-                save_thread = threading.Thread(
-                    target=lambda: self.save_and_update_view(root)
-                )
-                save_thread.start()
-                root.destroy()
-                messagebox.showinfo("Success", "Data updated successfully.")
-            except Exception as e:
-                messagebox.showerror("Error", "Failed to update shift. Error: " + str(e))
+            save_thread = threading.Thread(
+                target=lambda: self.save_and_update_view(root)
+            )
+            save_thread.start()
+            root.destroy()
+            messagebox.showinfo("Success", "Data updated successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", "Failed to update shift. Error: " + str(e))
 
     def save_and_update_view(self, window):
         try:
@@ -691,6 +750,7 @@ class ShyftGUI:
         except Exception as e:
             messagebox.showerror("Error", "Failed to save and update view. Error: " + str(e))
 
+            
     def delete_shift(self, event=None):
         selected_item = self.tree.selection()
         if not selected_item:
@@ -715,8 +775,8 @@ class ShyftGUI:
                 self.timer_window.reset()
                 self.timer_window.root.destroy()
                 self.timer_window = None
-                self.disable_topmost_menu()
                 self.enable_theme_menu()
+                self.disable_topmost_menu()
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to log shift: {str(e)}")
@@ -739,12 +799,12 @@ class ShyftGUI:
 
         settings_frame = ttk.Frame(settings_window, style="TFrame")
         settings_frame.pack(
-            side=tk.BOTTOM, 
-            padx=5,
-            ipadx=5,
-            ipady=1,
-            expand=tk.YES, 
-            fill=tk.BOTH
+           side=tk.BOTTOM, 
+           padx=5,
+           ipadx=20,
+           ipady=1,
+           expand=tk.YES, 
+           fill=tk.BOTH
         )
 
         time_color_button = ttk.Button(
@@ -789,20 +849,23 @@ class ShyftGUI:
             style="TButton",
         ).pack(pady=1, fill="x")
 
+        settings_window.grab_set()
+        settings_window.wait_window()
+
+
     def autologger(self, event=None):
-        self.disable_theme_menu()
         model_id_response = simpledialog.askstring(
             "Model ID", "Enter Model ID", parent=self.root
         )
         if not model_id_response:
-            return  # Exit if the dialog is cancelled or the input is empty
+            return None # Exit if the dialog is cancelled or the input is empty
         model_id = model_id_response.upper()
 
         project_id_response = simpledialog.askstring(
             "Project ID", "Enter Project ID", parent=self.root
         )
         if not project_id_response:
-            return  # Exit if no Project ID is provided
+            return None # Exit if no Project ID is provided
         project_id = project_id_response.upper()
 
         hourly_rate = simpledialog.askstring(
@@ -811,15 +874,18 @@ class ShyftGUI:
         try:
             hourly_rate = float(hourly_rate)  # Validate that hourly rate is a number
         except (TypeError, ValueError):
-            messagebox.showerror(
-                "Error", "Invalid hourly rate; please enter a numeric value."
-            )
-            return
+            if not hourly_rate:
+                return
+            else:
+                messagebox.showerror(
+                    "Error", "Invalid hourly rate; please enter a numeric value."
+                )
+                return None
 
         # Creating the Notes window with an explicitly short height
         notes_window = tk.Toplevel(self.root)
         notes_window.title("Notes - Autologger")
-        notes_window.geometry("400x400")  # Set initial size; width x height
+        notes_window.geometry("480x640")  # Set initial size; width x height
 
         # Text widget for note-taking
         text = Text(
@@ -833,7 +899,7 @@ class ShyftGUI:
 
         # Define the action for inserting a divider
         def insert_divider():
-            divider = "_" * 53 + "\n"
+            divider = "═" * 64 + "\n"
             text.insert(tk.INSERT, divider)
 
         # Start the timer when the notes window is opened, loading its "topmost" state from `config.ini`
@@ -843,11 +909,9 @@ class ShyftGUI:
             self.timer_window.start()
             topmost_state = self.config.getboolean("Theme", "timer_topmost")
             self.timer_window.root.attributes("-topmost", topmost_state)
-            self.enable_topmost_menu()
             self.disable_theme_menu()
-            self.timer_window.root.bind_all(f"<{modifier_key}-F>", self.toggle_timer_topmost)
-            self.timer_window.root.bind_all(f"<{modifier_key}-f>", self.toggle_timer_topmost)
-
+            self.enable_topmost_menu()
+            
         # Define the action for submitting notes
         def submit_notes():
             if self.timer_window:
@@ -870,6 +934,9 @@ class ShyftGUI:
                 with open(log_file_path, "w") as file:
                     file.write(text.get("1.0", tk.END))
 
+                lock = threading.Lock()
+
+                with lock:
                     self.data[formatted_id] = {
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "Model ID": model_id,
@@ -880,40 +947,35 @@ class ShyftGUI:
                         "Hourly rate": f"{hourly_rate:.2f}",
                         "Gross pay": f"{gross_pay:.2f}",
                     }
-                    self.save_data_and_update_view(notes_window)
+                    save_thread = threading.Thread(
+                        target=lambda: self.save_data_and_update_view(notes_window)
+                    )
+                    save_thread.start()
                 messagebox.showinfo("Success", "Shift logged successfully.")
             else:
                 messagebox.showerror("Error", "Timer is not running.")
-
-        def cancel_notes():
-            notes_window.destroy()
-            if self.timer_window:
-                self.timer_window.root.destroy()
-                self.timer_window = None
-
-        notes_window.protocol("WM_DELETE_WINDOW", cancel_notes)
 
         # Buttons for submit, cancel, and insert divider
         Button(
             button_frame,
             text="Submit",
             command=submit_notes,
-            bg=self.btn_text_color,
-            fg="black",
+            # bg=self.btn_text_color,
+            # fg="black",
         ).pack(side=tk.RIGHT, padx=5, pady=5)
         Button(
             button_frame,
             text="Cancel",
-            command=cancel_notes,
-            bg=self.btn_text_color,
-            fg="black",
+            command=lambda: [notes_window.destroy(), self.timer_window.root.destroy()],
+            # bg=self.btn_text_color,
+            # fg="black",
         ).pack(side=tk.LEFT, padx=5, pady=5)
         Button(
             button_frame,
             text="Insert Divider",
             command=insert_divider,
-            bg=self.btn_text_color,
-            fg="black",
+            # bg=self.btn_text_color,
+            # fg="black",
         ).pack(side=tk.LEFT, padx=5, pady=5)
 
     def format_id(self, id):
@@ -922,11 +984,12 @@ class ShyftGUI:
 
     def change_theme(self, theme_name):
         self.style.theme_use(theme_name)
+    
         # Update the config file
         self.config.set("Theme", "selected", theme_name)
-        with open(CONFIG_FILE, "w") as config_file:
+        with open(CONFIG_FILE, 'w') as config_file:
             self.config.write(config_file)
-                
+        print(f"Theme selection <{theme_name}> saved to `config.ini`.")
 
     def enable_topmost_menu(self):
         self.view_menu.entryconfig("Timer Always on Top", state="normal")
@@ -939,8 +1002,7 @@ class ShyftGUI:
 
     def enable_theme_menu(self):
         self.menu_bar.entryconfig("Theme", state="normal")
-
-
+                                    
     def setup_menu(self):
         # Create a Theme menu
         self.theme_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -968,6 +1030,9 @@ class ShyftGUI:
         # Configure the root window to use the menu bar
         self.root.config(menu=self.menu_bar)
 
+    def on_close(self, event=None):
+        self.root.quit()
+
 
 def run_tkinter_app():
     root = tk.Tk()
@@ -982,17 +1047,23 @@ def run_tkinter_app():
     root.bind(f"<{modifier_key}-t>", app.calculate_totals)
     root.bind(f"<{modifier_key}-A>", app.autologger)
     root.bind(f"<{modifier_key}-D>", app.delete_shift)
-    root.bind(f"<{modifier_key}-E>", app.edit_shift)
+    root.bind(f"<{modifier_key}-E>", app.edit_shift)    
     root.bind(f"<{modifier_key}-N>", app.manual_entry)
     root.bind(f"<{modifier_key}-L>", app.view_logs)
     root.bind(f"<{modifier_key}-T>", app.calculate_totals)
+    root.bind_all(f"<{modifier_key}-Q>", app.on_close)
+    root.bind_all(f"<{modifier_key}-q>", app.on_close)
 
     root.mainloop()
+
+
 
 def main():
     process = multiprocessing.Process(target=run_tkinter_app)
     process.start()
 
+
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     main()
+
