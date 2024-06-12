@@ -1,11 +1,10 @@
 # `CONTRIBUTING.md`
 
-## **OpenClaims**: Annotators Unite
+## **ENCLAIM**: Annotators Unite
 
 ### Introduction
 
-**OpenClaims** (**O**rganized **P**rofessionals for **E**thics in **N**etworking with
-**C**rowdsourced **L**abor and **A**lgorithmic **I**nternal **M**anagement **S**ystems)
+**ENCLAIM** (**E**thically I**n**tegrating **C**rowdsourced **L**abor with **A**lgorithmic **I**nternal **M**anagement)
 is a workers' union whose mission is to promote, propagate, and protect the interests 
 of data annotators worldwide.
 
