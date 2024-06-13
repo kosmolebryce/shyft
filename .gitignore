@@ -163,3 +163,4 @@ cython_debug/
 
 **/build/
 .DS_Store
+shyft_app/
