@@ -203,7 +203,7 @@ class ShyftGUI:
         self.refresh_view()
         self.timer_window = None
         self.root.resizable(True, False)
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_quit)
         self.root.bind_all(f"<{modifier_key}-m>", minimize_window)
 
     def toggle_timer_topmost(self):
@@ -215,7 +215,7 @@ class ShyftGUI:
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
 
-    def on_close(self):
+    def on_quit(self, event=None):
         self.running = False
         self.root.destroy()
 
@@ -955,8 +955,8 @@ def run_tkinter_app():
     root.bind(f"<{modifier_key}-N>", app.manual_entry)
     root.bind(f"<{modifier_key}-L>", app.view_logs)
     root.bind(f"<{modifier_key}-T>", app.calculate_totals)
-    root.bind_all(f"<{modifier_key}-Q>", app.on_close)
-    root.bind_all(f"<{modifier_key}-q>", app.on_close)
+    root.bind_all(f"<{modifier_key}-Q>", app.on_quit)
+    root.bind_all(f"<{modifier_key}-q>", app.on_quit)
 
     root.mainloop()
 
