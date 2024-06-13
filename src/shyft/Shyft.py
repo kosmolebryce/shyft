@@ -351,6 +351,12 @@ class ShyftGUI:
                     shift.get("Gross pay", "N/A"),
                 ),
             )
+    
+        # Select the first item in the tree view
+        first_item = self.tree.get_children()
+        if first_item:
+            self.tree.selection_set(first_item[0])
+            self.tree.focus(first_item[0])
 
     def calculate_totals(self, event=None):
         number_of_shifts = len(self.data.values())
@@ -388,6 +394,11 @@ class ShyftGUI:
             "", "end", values=("Estimated Net Income", f"${net_income:.2f}")
         )
 
+        def on_close():
+            totals_window.destroy()
+            self.root.focus_force()  # Return focus to the main window
+
+        totals_window.protocol("WM_DELETE_WINDOW", on_close)
         totals_window.grab_set()
         totals_window.wait_window()
 
@@ -443,6 +454,12 @@ class ShyftGUI:
 
         log_tree.bind("<<TreeviewSelect>>", on_log_selection)
 
+        def on_close():
+            log_window.destroy()
+            self.root.focus_force()  # Return focus to the main window
+
+        log_window.protocol("WM_DELETE_WINDOW", on_close)
+
     def validate_time_format(self, time_str):
         try:
             datetime.strptime(time_str, "%H:%M")
@@ -495,12 +512,13 @@ class ShyftGUI:
             with lock:
                 self.data[formatted_id] = new_data
                 self.save_data()
-            self.root.after(0, self.populate_tree)
+            self.root.after(0, self.populate_tree)  # This will refresh the tree and select the first item
             self.entries["window"].destroy()
             messagebox.showinfo("Success", "Shift logged successfully.")
+            self.root.focus_force()
         except ValueError as e:
             messagebox.showerror("Error", str(e))
-        self.refresh_view()
+        self.refresh_view()  # This will call populate_tree again, ensuring the first item is selected
 
     def manual_entry(self, event=None):
         window = tk.Toplevel(self.root)
@@ -540,11 +558,15 @@ class ShyftGUI:
         )
         cancel_button.pack(side=tk.LEFT, padx=5, expand=True)
 
+        def submit_and_close(event=None):
+            self.submit_action()
+
         submit_button = ttk.Button(
-            window, text="Submit", command=self.submit_action, style="TButton"
+            window, text="Submit", command=submit_and_close, style="TButton"
         )
         submit_button.pack(side=tk.RIGHT, padx=5, expand=True)
 
+        window.bind("<Return>", submit_and_close)  # Bind Enter key to submit
         self.entries[self.fields[0]].focus_set()
 
     def edit_shift(self, event=None):
@@ -561,6 +583,7 @@ class ShyftGUI:
         window.bind(f"<{modifier_key}-W>", close_current_window)
 
         entries = {}
+        entry_widgets = {}  # New dictionary to store Entry widgets
         fields = [
             "Date",
             "Model ID",
@@ -582,6 +605,7 @@ class ShyftGUI:
             label.pack(side=tk.LEFT)
             entry.pack(side=tk.RIGHT, expand=tk.YES, fill=tk.X)
             entries[field] = entry_var
+            entry_widgets[field] = entry  # Store the Entry widget
 
         for field in uppercase_fields:
             entry_var = entries[field]
@@ -590,7 +614,7 @@ class ShyftGUI:
             )
 
         entries["Date"].trace_add(
-            "write", lambda *args: entries["Date"].set(entries["Date"].get().upper())
+            "write", lambda *args: entry_widgets["Date"].focus_set()
         )
 
         cancel_button = ttk.Button(
@@ -604,11 +628,15 @@ class ShyftGUI:
             command=lambda: self.submit_action_edit(
                 window, entries, fields, selected_id
             ),
-            style="TButton",
+            style="TButton"
         )
-        submit_button.pack(side=tk.RIGHT, padx=5)
 
-        entries["Date"].trace_add("write", lambda *args: entries["Date"].focus_set())
+        def submit_and_close(event=None):
+            self.submit_action_edit(window, entries, fields, selected_id)
+
+        submit_button.pack(side=tk.RIGHT, padx=5)
+        window.bind("<Return>", submit_and_close)  # Bind Enter key to submit
+        entry_widgets["Date"].focus_set()  # Set focus to the Date Entry widget
 
     def submit_action_edit(self, root, entries, fields, selected_id):
         try:
@@ -630,6 +658,7 @@ class ShyftGUI:
             save_thread.start()
             root.destroy()
             messagebox.showinfo("Success", "Data updated successfully.")
+            self.root.focus_force()
         except Exception as e:
             messagebox.showerror("Error", "Failed to update shift. Error: " + str(e))
 
@@ -656,6 +685,7 @@ class ShyftGUI:
             del self.data[selected_id]
             self.save_data()
             self.populate_tree()
+            self.root.focus_force()
 
     def save_data_and_update_view(self, notes_window):
         try:
@@ -669,6 +699,8 @@ class ShyftGUI:
                 self.timer_window = None
                 self.enable_theme_menu()
                 self.disable_topmost_menu()
+
+            self.root.focus_force()
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to log shift: {str(e)}")
