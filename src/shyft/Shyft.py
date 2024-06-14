@@ -1,6 +1,7 @@
 import configparser
 import datetime
 import json
+import logging
 import multiprocessing
 import os
 import platform
@@ -10,6 +11,19 @@ import tkinter as tk
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import ttk, messagebox, simpledialog, Text, colorchooser
+
+# Initialize logging
+LOGS_DIR = Path(os.path.expanduser("~/.shyft")) / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOGS_DIR / 'app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Configuration and Paths setup
 if platform.system() == "Darwin":
@@ -21,8 +35,6 @@ else:
 
 APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_FILE_PATH = APP_SUPPORT_DIR / "data.json"
-LOGS_DIR = APP_SUPPORT_DIR / "logs"
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_SUPPORT_DIR / "config.ini"
 
 DEFAULT_SHIFT_STRUCTURE = {
@@ -36,16 +48,16 @@ DEFAULT_SHIFT_STRUCTURE = {
     "Gross pay": "",
 }
 
+logger.debug("Configuration and paths setup completed.")
 
-def get_modifier_key(event):
+def get_modifier_key():
     if platform.system() == "Darwin":
         return "Command"
     else:
         return "Control"
 
-
-modifier_key = get_modifier_key(event=None)
-
+modifier_key = get_modifier_key()
+logger.debug(f"Modifier key set to {modifier_key}.")
 
 def format_to_two_decimals(value):
     try:
@@ -53,8 +65,8 @@ def format_to_two_decimals(value):
         formatted_value = "{:.2f}".format(float_value)
         return formatted_value
     except ValueError:
+        logger.error(f"ValueError: Unable to format value {value} to two decimals.")
         return value
-
 
 def close_current_window(event):
     widget = event.widget
@@ -64,12 +76,12 @@ def close_current_window(event):
         toplevel = widget.winfo_toplevel()
         if isinstance(toplevel, tk.Toplevel):
             toplevel.destroy()
-
+    logger.debug("Closed current window.")
 
 def minimize_window(event=None):
     widget = event.widget.winfo_toplevel()
     widget.iconify()
-
+    logger.debug("Minimized window.")
 
 class TimerWindow:
     def __init__(self, root, time_color="#A78C7B", bg_color="#FFBE98"):
@@ -80,11 +92,13 @@ class TimerWindow:
         else:
             self.root.geometry("200x85")
         self.root.configure(bg=bg_color)
+        
         self.elapsed_time = timedelta(0)
         self.running = False
         self.last_time = None
         self.time_color = time_color
         self.bg_color = bg_color
+        
         self.timer_label = tk.Label(
             self.root,
             text="00:00:00",
@@ -141,43 +155,46 @@ class TimerWindow:
         button_frame.grid_columnconfigure(1, weight=1)
         button_frame.grid_columnconfigure(2, weight=1)
 
-        self.update_timer_thread = threading.Thread(target=self.update_timer)
-        self.update_timer_thread.daemon = True
+        self.update_timer_thread = threading.Thread(target=self.update_timer, daemon=True)
         self.update_timer_thread.start()
+        logger.info("Timer window initialized.")
+
+        self.root.protocol("WM_DELETE_WINDOW", self.destroy)
 
     def start(self):
         if not self.running:
             self.running = True
             self.last_time = datetime.now()
+            logger.debug("Timer started.")
 
     def stop(self):
         if self.running:
             self.running = False
             self.elapsed_time += datetime.now() - self.last_time
+            logger.debug("Timer stopped.")
 
-    def reset(self) -> None:
+    def reset(self):
         self.stop()
         self.elapsed_time = timedelta(0)
-        self.timer_label.config(text="00:00:00")
+        self.update_label("00:00:00")
+        logger.debug("Timer reset.")
+
+    def update_label(self, text):
+        self.timer_label.config(text=text)
 
     def update_timer(self):
         while True:
-            try:
-                if self.running and self.timer_label.winfo_exists():
-                    current_time = datetime.now()
-                    delta = current_time - self.last_time
-                    elapsed = self.elapsed_time + delta
-                    self.root.after(
-                        0,
-                        lambda: self.timer_label.config(
-                            text=str(elapsed).split(".")[0].rjust(8, "0")
-                        ),
-                    )
-                time.sleep(0.1)
-            except tk.TclError as e:
-                print(f"Error updating label: {e}")
-                break
+            if self.running:
+                current_time = datetime.now()
+                delta = current_time - self.last_time
+                elapsed = self.elapsed_time + delta
+                self.root.after(0, self.update_label, str(elapsed).split(".")[0].rjust(8, "0"))
+            time.sleep(0.1)
 
+    def destroy(self):
+        self.running = False
+        self.root.after(0, self.root.destroy)
+        logger.debug("Timer window destroyed.")
 
 class ShyftGUI:
     def __init__(self, root):
@@ -205,6 +222,7 @@ class ShyftGUI:
         self.root.resizable(True, False)
         self.root.protocol("WM_DELETE_WINDOW", self.on_quit)
         self.root.bind_all(f"<{modifier_key}-m>", minimize_window)
+        logger.info("ShyftGUI initialized.")
 
     def toggle_timer_topmost(self):
         if self.timer_window:
@@ -214,10 +232,12 @@ class ShyftGUI:
         self.config.set("Theme", "timer_topmost", str(new_topmost_state))
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
+        logger.debug(f"Timer topmost state set to {new_topmost_state}.")
 
     def on_quit(self, event=None):
         self.running = False
         self.root.destroy()
+        logger.info("Application quit.")
 
     def configure_styles(self):
         self.style = ttk.Style(self.root)
@@ -225,9 +245,6 @@ class ShyftGUI:
         self.style.theme_use(self.selected_theme)
 
     def update_styles(self):
-        # self.style.configure("TEntry", background="white")
-        # self.style.configure("Treeview", background="white", fieldbackground="white", foreground="black")
-        # self.style.configure("Treeview.Heading", font=("Helvetica", 10, "bold"), foreground="black", background="#ccc")
         self.style.map(
             "Treeview",
             background=[("selected", "#FFBE98")],
@@ -248,15 +265,15 @@ class ShyftGUI:
                     for key in self.data:
                         for k in DEFAULT_SHIFT_STRUCTURE:
                             self.data[key].setdefault(k, "")
-                print(f"Loaded data: {self.data}")
+                logger.debug(f"Loaded data: {self.data}")
             else:
                 self.data = {}
-                print("Data file does not exist. Initialized with empty data.")
+                logger.debug("Data file does not exist. Initialized with empty data.")
         except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
+            logger.error(f"Error decoding JSON: {e}")
             self.data = {}
         except Exception as e:
-            print(f"Failed to load data file: {e}")
+            logger.error(f"Failed to load data file: {e}")
             self.data = {}
 
     def save_data(self):
@@ -269,7 +286,9 @@ class ShyftGUI:
             self.config.set("Theme", "selected", self.selected_theme)
             with open(CONFIG_FILE, "w") as config_file:
                 self.config.write(config_file)
+            logger.debug("Data saved successfully.")
         except Exception as e:
+            logger.error(f"Save Failed: {e}")
             messagebox.showerror("Save Failed", str(e))
 
     def create_widgets(self):
@@ -326,6 +345,7 @@ class ShyftGUI:
         ttk.Button(
             button_frame, text="Totals", command=self.calculate_totals, style="TButton"
         ).pack(side="left", expand=True)
+        logger.info("Widgets created.")
 
     def refresh_view(self):
         self.load_data()
@@ -351,12 +371,11 @@ class ShyftGUI:
                     shift.get("Gross pay", "N/A"),
                 ),
             )
-    
-        # Select the first item in the tree view
         first_item = self.tree.get_children()
-        if first_item:
+        if (first_item):
             self.tree.selection_set(first_item[0])
             self.tree.focus(first_item[0])
+        logger.debug("Tree view populated with data.")
 
     def calculate_totals(self, event=None):
         number_of_shifts = len(self.data.values())
@@ -401,6 +420,7 @@ class ShyftGUI:
         totals_window.protocol("WM_DELETE_WINDOW", on_close)
         totals_window.grab_set()
         totals_window.wait_window()
+        logger.debug("Totals window displayed.")
 
     def view_logs(self, event=None):
         os.chdir(LOGS_DIR)
@@ -459,11 +479,13 @@ class ShyftGUI:
             self.root.focus_force()  # Return focus to the main window
 
         log_window.protocol("WM_DELETE_WINDOW", on_close)
+        logger.debug("Logs window displayed.")
 
     def validate_time_format(self, time_str):
         try:
             datetime.strptime(time_str, "%H:%M")
         except ValueError:
+            logger.error(f"Invalid time format: {time_str}. Use HH:MM format.")
             raise ValueError("Invalid time format. Use HH:MM format.")
 
     def calculate_duration(self, start, end):
@@ -475,6 +497,7 @@ class ShyftGUI:
             duration = (end_dt - start_dt).total_seconds() / 3600.0
             return duration
         except ValueError:
+            logger.error("Invalid time format. Use HH:MM format.")
             raise ValueError("Invalid time format. Use HH:MM format.")
 
     def submit_action(self):
@@ -516,8 +539,10 @@ class ShyftGUI:
             self.entries["window"].destroy()
             messagebox.showinfo("Success", "Shift logged successfully.")
             self.root.focus_force()
+            logger.info("Shift logged successfully.")
         except ValueError as e:
             messagebox.showerror("Error", str(e))
+            logger.error(f"Shift logging failed: {e}")
         self.refresh_view()  # This will call populate_tree again, ensuring the first item is selected
 
     def manual_entry(self, event=None):
@@ -568,6 +593,7 @@ class ShyftGUI:
 
         window.bind("<Return>", submit_and_close)  # Bind Enter key to submit
         self.entries[self.fields[0]].focus_set()
+        logger.debug("Manual entry window displayed.")
 
     def edit_shift(self, event=None):
         selected_item = self.tree.selection()
@@ -637,6 +663,7 @@ class ShyftGUI:
         submit_button.pack(side=tk.RIGHT, padx=5)
         window.bind("<Return>", submit_and_close)  # Bind Enter key to submit
         entry_widgets["Date"].focus_set()  # Set focus to the Date Entry widget
+        logger.debug("Edit shift window displayed.")
 
     def submit_action_edit(self, root, entries, fields, selected_id):
         try:
@@ -659,8 +686,10 @@ class ShyftGUI:
             root.destroy()
             messagebox.showinfo("Success", "Data updated successfully.")
             self.root.focus_force()
+            logger.info("Shift edited successfully.")
         except Exception as e:
             messagebox.showerror("Error", "Failed to update shift. Error: " + str(e))
+            logger.error(f"Failed to update shift: {e}")
 
     def save_and_update_view(self, window):
         try:
@@ -671,6 +700,7 @@ class ShyftGUI:
             messagebox.showerror(
                 "Error", "Failed to save and update view. Error: " + str(e)
             )
+            logger.error(f"Failed to save and update view: {e}")
 
     def delete_shift(self, event=None):
         selected_item = self.tree.selection()
@@ -686,6 +716,7 @@ class ShyftGUI:
             self.save_data()
             self.populate_tree()
             self.root.focus_force()
+            logger.info(f"Shift {selected_id} deleted.")
 
     def save_data_and_update_view(self, notes_window):
         try:
@@ -695,38 +726,76 @@ class ShyftGUI:
 
             if self.timer_window:
                 self.timer_window.reset()
-                self.timer_window.root.destroy()
+                self.timer_window.destroy()
                 self.timer_window = None
                 self.enable_theme_menu()
                 self.disable_topmost_menu()
 
             self.root.focus_force()
+            logger.info("Data saved and view updated.")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to log shift: {str(e)}")
+            logger.error(f"Failed to log shift: {e}")
+
+    def reinitialize_timer_window(self):
+        if self.timer_window:
+            self.timer_window.destroy()
+            self.timer_window = TimerWindow(
+                tk.Toplevel(self.root), time_color=self.time_color, bg_color=self.bg_color
+            )
+            self.timer_window.start()
+            topmost_state = self.config.getboolean("Theme", "timer_topmost")
+            self.timer_window.root.attributes("-topmost", topmost_state)
+            logger.info("Timer window reinitialized with new settings.")
 
     def choose_time_color(self):
-        print("Entering choose_time_color")
+        if self.timer_window:
+            response = messagebox.askyesno(
+                "Restart Timer Required",
+                "Changing the timer color requires restarting the timer. Do you want to proceed?",
+            )
+            if not response:
+                return
+        logger.debug("Entering choose_time_color.")
         color_code = colorchooser.askcolor(title="Choose Stopclock Timestring Color")[1]
         if color_code:
             self.time_color = color_code
             self.save_config()
+            if self.timer_window:
+                self.reinitialize_timer_window()
 
     def choose_bg_color(self):
-        print("Entering choose_bg_color")
+        if self.timer_window:
+            response = messagebox.askyesno(
+                "Restart Timer Required",
+                "Changing the background color requires restarting the timer. Do you want to proceed?",
+            )
+            if not response:
+                return
+        logger.debug("Entering choose_bg_color.")
         color_code = colorchooser.askcolor(title="Choose Stopclock Background Color")[1]
         if color_code:
             self.bg_color = color_code
             self.save_config()
+            if self.timer_window:
+                self.reinitialize_timer_window()
 
     def choose_btn_text_color(self):
-        print("Entering choose_btn_text_color")
-        color_code = colorchooser.askcolor(title="Choose Stopclock Button Text Color")[
-            1
-        ]
+        if self.timer_window:
+            response = messagebox.askyesno(
+                "Restart Timer Required",
+                "Changing the button text color requires restarting the timer. Do you want to proceed?",
+            )
+            if not response:
+                return
+        logger.debug("Entering choose_btn_text_color.")
+        color_code = colorchooser.askcolor(title="Choose Stopclock Button Text Color")[1]
         if color_code:
             self.btn_text_color = color_code
             self.save_config()
+            if self.timer_window:
+                self.reinitialize_timer_window()
 
     def save_config(self):
         if not self.config.has_section("Colors"):
@@ -738,6 +807,7 @@ class ShyftGUI:
             self.config.write(config_file)
         self.update_styles()
         messagebox.showinfo("Settings Saved", "New settings have been applied.")
+        logger.info("Configuration saved.")
 
     def autologger(self, event=None):
         model_id_response = simpledialog.askstring(
@@ -841,8 +911,22 @@ class ShyftGUI:
                     )
                     save_thread.start()
                 messagebox.showinfo("Success", "Shift logged successfully.")
+                logger.info("Shift logged successfully.")
             else:
                 messagebox.showerror("Error", "Timer is not running.")
+                logger.error("Failed to log shift: Timer is not running.")
+
+        def cancel_notes():
+            if self.timer_window:
+                self.timer_window.reset()
+                self.timer_window.destroy()
+                self.timer_window = None
+                self.enable_theme_menu()
+                self.disable_topmost_menu()
+            notes_window.destroy()
+            self.root.focus_force()
+
+        notes_window.protocol("WM_DELETE_WINDOW", cancel_notes)
 
         tk.Button(
             button_frame,
@@ -852,13 +936,14 @@ class ShyftGUI:
         tk.Button(
             button_frame,
             text="Cancel",
-            command=lambda: [notes_window.destroy(), self.timer_window.root.destroy()],
+            command=cancel_notes,
         ).pack(side=tk.LEFT, padx=5, pady=5)
         tk.Button(
             button_frame,
             text="Insert Divider",
             command=insert_divider,
         ).pack(side=tk.LEFT, padx=5, pady=5)
+        logger.debug("Autologger window displayed.")
 
     def format_id(self, id):
         return f"{id:04d}"
@@ -868,7 +953,7 @@ class ShyftGUI:
         self.config.set("Theme", "selected", theme_name)
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
-        print(f"Theme selection <{theme_name}> saved to `config.ini`.")
+        logger.debug(f"Theme selection <{theme_name}> saved to `config.ini`.")
 
     def enable_topmost_menu(self):
         self.view_menu.entryconfig("Timer Always on Top", state="normal")
@@ -881,12 +966,6 @@ class ShyftGUI:
 
     def enable_theme_menu(self):
         self.menu_bar.entryconfig("Theme", state="normal")
-
-    def setup_menu(self):
-        self.menu_bar = tk.Menu(self.root)
-        self.setup_theme_menu()
-        self.setup_view_menu()
-        self.root.config(menu=self.menu_bar)
 
     def setup_menu(self):
         self.menu_bar = tk.Menu(self.root)
@@ -937,7 +1016,6 @@ class ShyftGUI:
         )
         self.menu_bar.add_cascade(label="Settings", menu=self.settings_menu)
 
-
 def run_tkinter_app():
     root = tk.Tk()
     style = ttk.Style()
@@ -960,11 +1038,10 @@ def run_tkinter_app():
 
     root.mainloop()
 
-
 def main():
     process = multiprocessing.Process(target=run_tkinter_app)
     process.start()
-
+    logger.info("Application started.")
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
