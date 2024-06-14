@@ -396,7 +396,7 @@ class ShyftGUI:
         totals_tree.heading("Description", text="Description", anchor="w")
         totals_tree.heading("Value", text="Value", anchor="w")
         totals_tree.column("Description", anchor="w", width=200)
-        totals_tree.column("Value", anchor="e", width=50)
+        totals_tree.column("Value", anchor="e", width=150)
         totals_tree.pack(expand=True, fill="both")
 
         totals_tree.insert("", "end", values=("Shifts Worked", number_of_shifts))

@@ -156,6 +156,15 @@ def _setup_openssl():
 _setup_openssl()
 
 
+def _boot_tkinter():
+    import os
+
+    resourcepath = os.environ["RESOURCEPATH"]
+    os.putenv("TCL_LIBRARY", os.path.join(resourcepath, "lib/tcl8"))
+    os.putenv("TK_LIBRARY", os.path.join(resourcepath, "lib/tk8.6"))
+_boot_tkinter()
+
+
 DEFAULT_SCRIPT='Shyft.py'
 SCRIPT_MAP={}
 _run()
