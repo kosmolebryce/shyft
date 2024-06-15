@@ -86,19 +86,29 @@ def minimize_window(event=None):
 class TimerWindow:
     def __init__(self, root, time_color="#A78C7B", bg_color="#FFBE98"):
         self.root = root
-        self.root.title("Timer")
-        if platform.system() == "Darwin":
-            self.root.geometry("140x70")
+        self.config = configparser.ConfigParser()
+        self.config.read(CONFIG_FILE)
+
+        if not self.config.has_section("Window"):
+            self.config.add_section("Window")
+            self.custom_width = 180
+            self.custom_height = 90
+            logger.debug("No 'Window' section found in config file, using default dimensions.")
         else:
-            self.root.geometry("200x85")
+            self.custom_width = self.config.getint("Window", "width", fallback=180)
+            self.custom_height = self.config.getint("Window", "height", fallback=90)
+            logger.debug(f"Loaded custom dimensions from config file: width={self.custom_width}, height={self.custom_height}")
+
+        self.root.title("Timer")
+        self.root.geometry(f"{self.custom_width}x{self.custom_height}")
         self.root.configure(bg=bg_color)
-        
+
         self.elapsed_time = timedelta(0)
         self.running = False
         self.last_time = None
         self.time_color = time_color
         self.bg_color = bg_color
-        
+
         self.timer_label = tk.Label(
             self.root,
             text="00:00:00",
@@ -106,10 +116,10 @@ class TimerWindow:
             fg=self.time_color,
             bg=self.bg_color,
         )
-        self.timer_label.pack(padx=5, pady=0)
+        self.timer_label.pack(expand=True, padx=10, pady=(5, 0))
 
         button_frame = tk.Frame(self.root, bg=self.bg_color)
-        button_frame.pack(fill="x", pady=0)
+        button_frame.pack(fill="x", padx=10, pady=(0, 5))
 
         button_font = ("Helvetica", 10)
         self.start_button = tk.Button(
@@ -159,7 +169,7 @@ class TimerWindow:
         self.update_timer_thread.start()
         logger.info("Timer window initialized.")
 
-        self.root.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def start(self):
         if not self.running:
@@ -180,7 +190,8 @@ class TimerWindow:
         logger.debug("Timer reset.")
 
     def update_label(self, text):
-        self.timer_label.config(text=text)
+        if self.timer_label.winfo_exists():
+            self.timer_label.config(text=text)
 
     def update_timer(self):
         while True:
@@ -191,10 +202,15 @@ class TimerWindow:
                 self.root.after(0, self.update_label, str(elapsed).split(".")[0].rjust(8, "0"))
             time.sleep(0.1)
 
-    def destroy(self):
+    def on_close(self):
         self.running = False
+        self.config.set("Window", "width", str(self.root.winfo_width()))
+        self.config.set("Window", "height", str(self.root.winfo_height()))
+        with open(CONFIG_FILE, "w") as config_file:
+            self.config.write(config_file)
+        logger.debug(f"Timer window dimensions saved: width={self.root.winfo_width()}, height={self.root.winfo_height()}")
         self.root.after(0, self.root.destroy)
-        logger.debug("Timer window destroyed.")
+        logger.debug("Timer window closed.")
 
 class ShyftGUI:
     def __init__(self, root):
@@ -207,11 +223,13 @@ class ShyftGUI:
         self.root.configure(bg=self.bg_color)
         self.config = configparser.ConfigParser()
         self.config.read(CONFIG_FILE)
+        if not self.config.has_section("Theme"):
+            self.config.add_section("Theme")
         if platform.system() == "Darwin":
             self.selected_theme = "aqua"
         else:
             self.selected_theme = "default"
-        self.timer_topmost = False
+        self.timer_topmost = self.config.getboolean("Theme", "timer_topmost", fallback=False)
         self.timer_topmost_var = tk.BooleanVar(value=self.timer_topmost)
         self.configure_styles()
         self.data = {}
@@ -229,10 +247,11 @@ class ShyftGUI:
             current_topmost_state = self.timer_window.root.attributes("-topmost")
             new_topmost_state = not current_topmost_state
             self.timer_window.root.attributes("-topmost", new_topmost_state)
-        self.config.set("Theme", "timer_topmost", str(new_topmost_state))
-        with open(CONFIG_FILE, "w") as config_file:
-            self.config.write(config_file)
-        logger.debug(f"Timer topmost state set to {new_topmost_state}.")
+            self.config.set("Theme", "timer_topmost", str(new_topmost_state))
+            with open(CONFIG_FILE, "w") as config_file:
+                self.config.write(config_file)
+            self.timer_topmost_var.set(new_topmost_state)
+            logger.debug(f"Timer topmost state set to {new_topmost_state}.")
 
     def on_quit(self, event=None):
         self.running = False
@@ -726,7 +745,7 @@ class ShyftGUI:
 
             if self.timer_window:
                 self.timer_window.reset()
-                self.timer_window.destroy()
+                self.timer_window.on_close()
                 self.timer_window = None
                 self.enable_theme_menu()
                 self.disable_topmost_menu()
@@ -740,12 +759,12 @@ class ShyftGUI:
 
     def reinitialize_timer_window(self):
         if self.timer_window:
-            self.timer_window.destroy()
+            self.timer_window.on_close()
             self.timer_window = TimerWindow(
                 tk.Toplevel(self.root), time_color=self.time_color, bg_color=self.bg_color
             )
             self.timer_window.start()
-            topmost_state = self.config.getboolean("Theme", "timer_topmost")
+            topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
             self.timer_window.root.attributes("-topmost", topmost_state)
             logger.info("Timer window reinitialized with new settings.")
 
@@ -800,9 +819,14 @@ class ShyftGUI:
     def save_config(self):
         if not self.config.has_section("Colors"):
             self.config.add_section("Colors")
+        if not self.config.has_section("Window"):
+            self.config.add_section("Window")
         self.config.set("Colors", "time_color", self.time_color)
         self.config.set("Colors", "bg_color", self.bg_color)
         self.config.set("Colors", "btn_text_color", self.btn_text_color)
+        if self.timer_window:
+            self.config.set("Window", "width", str(self.timer_window.root.winfo_width()))
+            self.config.set("Window", "height", str(self.timer_window.root.winfo_height()))
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
         self.update_styles()
@@ -867,13 +891,13 @@ class ShyftGUI:
                 timer_window, time_color=self.time_color, bg_color=self.bg_color
             )
             self.timer_window.start()
-            topmost_state = self.config.getboolean("Theme", "timer_topmost")
+            topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
             self.timer_window.root.attributes("-topmost", topmost_state)
             self.disable_theme_menu()
             self.enable_topmost_menu()
 
         def submit_notes():
-            if self.timer_window:
+            if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
                 self.timer_window.stop()
                 elapsed_time = self.timer_window.elapsed_time
 
@@ -917,9 +941,9 @@ class ShyftGUI:
                 logger.error("Failed to log shift: Timer is not running.")
 
         def cancel_notes():
-            if self.timer_window:
+            if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
                 self.timer_window.reset()
-                self.timer_window.destroy()
+                self.timer_window.on_close()
                 self.timer_window = None
                 self.enable_theme_menu()
                 self.disable_topmost_menu()
@@ -971,7 +995,7 @@ class ShyftGUI:
         self.menu_bar = tk.Menu(self.root)
         self.setup_theme_menu()
         self.setup_view_menu()
-        self.setup_settings_menu()  # New method to set up Settings menu
+        self.setup_settings_menu()
         self.root.config(menu=self.menu_bar)
 
     def setup_theme_menu(self):
