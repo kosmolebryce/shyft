@@ -59,11 +59,11 @@ If you'd like to build the program from source, follow these steps:
 4.  At this point, you have a few options:
     - If you'd like to run the program without installing it, you can invoke it directly with your Python interpreter by entering the following command.
 
-    ```bash
-    python shyft.py
-    ```
+        ```bash
+        python shyft.py
+        ```
 
-    > This will initialize the GUI, streaming debugging/logging statements as output to the terminal while the program is in use.
+        > This will initialize the GUI, streaming debugging/logging statements as output to the terminal while the program is in use.
 
     - If you'd like to build and install the program, there are lots of tools you can use. The most popular option for macOS is probably `py2app`, while the most popular options for Windows are probably `pyinstaller` and `cxfreeze`.
 
