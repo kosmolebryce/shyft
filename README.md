@@ -16,7 +16,7 @@ standard library.
 
 ### Quickstart Installation Guide
 You can install `Shyft` via a number of methods, but the easiest, by far, are 
-the pre-packaged `Shyft.dmg` (for macOS users) or `Shyft_Installer.exe` 
+the pre-packaged `Shyft.dmg` (for macOS users) or `ShyftSetup.exe` 
 (for Windows users).
 
 #### macOS
