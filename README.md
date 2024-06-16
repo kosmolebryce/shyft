@@ -26,8 +26,8 @@ opening it, and then dragging and dropping the `Shyft.app` file into the
 
 #### Windows
 If you're using Windows, you can install `Shyft` by downloading and running 
-the `Shyft_Installer.exe` file. The installation wizard will guide you through 
-the setup process. Once it's complete, you can run the program from the Start 
+the `ShyftSetup.exe` file. The installation wizard will guide you through the 
+setup process. Once it's complete, you can run the program from the Start 
 menu.
 
 ----
