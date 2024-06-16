@@ -36,7 +36,7 @@ Currently, there are no package installers available for Linux. Please see the i
 ----
 
 ### Building `Shyft` from Source
-If you'd like to build the program from source, follow these steps:
+If you'd like to contribute to the code base or build the program from source (e.g, to troubleshoot installation errors), follow these steps:
 
 1.  Open your system's terminal.
     - **macOS**: Simultaneously press the command key and space bar to open the `Spotlight` search field. Type "terminal", and then select `Terminal.app`.
