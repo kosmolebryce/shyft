@@ -65,8 +65,11 @@ If you'd like to build the program from source, follow these steps:
 
         > This will initialize the GUI, streaming debugging/logging statements as output to the terminal while the program is in use.
 
-    - If you'd like to build and install the program, there are lots of tools you can use. The most popular option for macOS is probably `py2app`, while the most popular options for Windows are probably `pyinstaller` and `cxfreeze`.
+    - If you'd like to build and install the program, there are lots of tools you can use. The most popular option for macOS is probably `py2app`, while the most popular options for Windows are probably `pyinstaller` and `cxfreeze`. You can install any of these options by using Python's package manager `pip`, which should have been installed alongside your Python interpreter as part of Python's installation process. For example, if you'd like to install `pyinstaller`, you'd run the following command from your command line/terminal:
 
+    ```bash
+    pip install pyinstaller
+    ```
 
 ----
 
