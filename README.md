@@ -1,9 +1,7 @@
 # `README.md`
 
 ## Shyft
-
-> `v0.1`
-> *by Enclaim*
+`v0.1`
 
 ----
 
