@@ -5,15 +5,23 @@ import logging
 import multiprocessing
 import os
 import platform
+import re
 import threading
 import time
 import tkinter as tk
+import vypyr
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import ttk, messagebox, simpledialog, Text, colorchooser
+from vypyr.utils import tysk
 
 # Initialize logging
-LOGS_DIR = Path(os.path.expanduser("~/.shyft")) / "logs"
+if platform.system() == "Darwin":
+    LOGS_DIR = Path("~/Library/Application Support/Shyft/logs").expanduser()
+elif platform.system() == "Windows":
+    LOGS_DIR = Path(os.getenv("LOCALAPPDATA")) / "Shyft" / "logs"
+else:
+    LOGS_DIR = Path("~/.shyft/logs").expanduser()
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.DEBUG,
@@ -29,7 +37,7 @@ logger = logging.getLogger(__name__)
 if platform.system() == "Darwin":
     APP_SUPPORT_DIR = Path(os.path.expanduser("~/Library/Application Support/Shyft"))
 elif platform.system() == "Windows":
-    APP_SUPPORT_DIR = Path("C:\\ProgramData\\Shyft")
+    APP_SUPPORT_DIR = Path(os.getenv("LOCALAPPDATA")) / "Shyft"
 else:
     APP_SUPPORT_DIR = Path(os.path.expanduser("~/.shyft"))
 
@@ -232,7 +240,7 @@ class ShyftGUI:
         self.timer_topmost = self.config.getboolean("Theme", "timer_topmost", fallback=False)
         self.timer_topmost_var = tk.BooleanVar(value=self.timer_topmost)
         self.configure_styles()
-        self.data = {}
+        self.data = {"data": {}}
         self.setup_menu()
         self.create_widgets()
         self.refresh_view()
@@ -274,41 +282,30 @@ class ShyftGUI:
         )
 
     def load_data(self):
-        current_working_directory = os.getcwd()
-        if current_working_directory != APP_SUPPORT_DIR:
-            os.chdir(APP_SUPPORT_DIR)
         try:
             if self.data_file_path.exists():
-                with self.data_file_path.open("r") as f:
-                    self.data = json.load(f).get("data", {})
-                    for key in self.data:
-                        for k in DEFAULT_SHIFT_STRUCTURE:
-                            self.data[key].setdefault(k, "")
-                logger.debug(f"Loaded data: {self.data}")
+                with open(self.data_file_path, 'r') as f:
+                    self.data = json.load(f)
             else:
-                self.data = {}
-                logger.debug("Data file does not exist. Initialized with empty data.")
+                self.data = {"data": {}}
+            logger.debug(f"Loaded data: {self.data}")
         except json.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
-            self.data = {}
+            self.data = {"data": {}}
         except Exception as e:
             logger.error(f"Failed to load data file: {e}")
-            self.data = {}
+            self.data = {"data": {}}
+
 
     def save_data(self):
-        current_working_directory = os.getcwd()
-        if current_working_directory != APP_SUPPORT_DIR:
-            os.chdir(APP_SUPPORT_DIR)
         try:
-            with self.data_file_path.open("w") as f:
-                json.dump({"data": self.data}, f, indent=4)
-            self.config.set("Theme", "selected", self.selected_theme)
-            with open(CONFIG_FILE, "w") as config_file:
-                self.config.write(config_file)
+            with open(self.data_file_path, 'w') as f:
+                json.dump(self.data, f, indent=4)
             logger.debug("Data saved successfully.")
         except Exception as e:
-            logger.error(f"Save Failed: {e}")
-            messagebox.showerror("Save Failed", str(e))
+            logger.error(f"Failed to save data: {e}")
+            messagebox.showerror("Error", f"Failed to save data: {e}")
+
 
     def create_widgets(self):
         self.tree = ttk.Treeview(
@@ -373,7 +370,12 @@ class ShyftGUI:
     def populate_tree(self):
         for i in self.tree.get_children():
             self.tree.delete(i)
-        for id, shift in self.data.items():
+        
+        # Sort the data keys (shift IDs) in descending order
+        sorted_keys = sorted(self.data['data'].keys(), key=lambda x: int(x), reverse=True)
+        
+        for id in sorted_keys:
+            shift = self.data['data'][id]
             self.tree.insert(
                 "",
                 "end",
@@ -388,13 +390,18 @@ class ShyftGUI:
                     shift.get("Duration (hrs)", "N/A"),
                     shift.get("Hourly rate", "N/A"),
                     shift.get("Gross pay", "N/A"),
+                    shift.get("Tasks completed", "N/A")
                 ),
             )
+        
+        # Select the first item (most recent shift)
         first_item = self.tree.get_children()
-        if (first_item):
+        if first_item:
             self.tree.selection_set(first_item[0])
             self.tree.focus(first_item[0])
-        logger.debug("Tree view populated with data.")
+        
+        logger.debug("Tree view populated with updated data.")
+
 
     def calculate_totals(self, event=None):
         number_of_shifts = len(self.data.values())
@@ -461,14 +468,17 @@ class ShyftGUI:
 
         log_tree.tag_configure("highlight", background="#FFBE98")
 
+        # Get all log files and sort them
         log_files = sorted(
             [
                 f
                 for f in os.scandir(LOGS_DIR)
                 if f.is_file() and not f.name.startswith(".")
             ],
-            key=lambda x: x.name,
+            key=lambda x: int(re.search(r'^(\d+)', x.name).group(1) if re.search(r'^(\d+)', x.name) else 0),
+            reverse=True
         )
+
         for log_file in log_files:
             log_tree.insert("", "end", iid=log_file.name, values=[log_file.name])
 
@@ -500,6 +510,22 @@ class ShyftGUI:
         log_window.protocol("WM_DELETE_WINDOW", on_close)
         logger.debug("Logs window displayed.")
 
+        # Select the first item (most recent log) if available
+        first_item = log_tree.get_children()
+        if first_item:
+            log_tree.selection_set(first_item[0])
+            log_tree.focus(first_item[0])
+            log_tree.event_generate("<<TreeviewSelect>>")
+
+        # Make the log window active and set focus to the log tree
+        log_window.lift()
+        log_window.focus_force()
+        log_tree.focus_set()
+
+        # Wait for the window to be fully created and then set focus again
+        log_window.update()
+        log_tree.focus_set()
+        
     def validate_time_format(self, time_str):
         try:
             datetime.strptime(time_str, "%H:%M")
@@ -529,7 +555,7 @@ class ShyftGUI:
                 messagebox.showerror("Error", "All fields must be filled out.")
                 return
 
-            new_id = max([int(x) for x in self.data.keys()], default=0) + 1
+            new_id = max([int(x) for x in self.data["data"].keys()], default=0) + 1
             formatted_id = self.format_id(new_id)
 
             duration_hrs = self.calculate_duration(
@@ -552,7 +578,7 @@ class ShyftGUI:
 
             lock = threading.Lock()
             with lock:
-                self.data[formatted_id] = new_data
+                self.data['data'][formatted_id] = new_data
                 self.save_data()
             self.root.after(0, self.populate_tree)  # This will refresh the tree and select the first item
             self.entries["window"].destroy()
@@ -620,7 +646,7 @@ class ShyftGUI:
             messagebox.showerror("Error", "Please select a shift to edit.")
             return
         selected_id = selected_item[0]
-        shift = self.data.get(selected_id)
+        shift = self.data['data'].get(selected_id)
 
         window = tk.Toplevel(self.root)
         window.title("Edit Shift")
@@ -696,7 +722,7 @@ class ShyftGUI:
 
             lock = threading.Lock()
             with lock:
-                self.data[selected_id] = updated_data
+                self.data['data'][selected_id] = updated_data
 
             save_thread = threading.Thread(
                 target=lambda: self.save_and_update_view(root)
@@ -731,11 +757,28 @@ class ShyftGUI:
             "Confirm Delete", "Are you sure you want to delete the selected shift?"
         )
         if response:
-            del self.data[selected_id]
-            self.save_data()
-            self.populate_tree()
-            self.root.focus_force()
-            logger.info(f"Shift {selected_id} deleted.")
+            try:
+                # Delete from data structure
+                del self.data['data'][selected_id]
+                self.save_data()
+
+                # Delete associated .md file
+                md_file_path = LOGS_DIR / f"{selected_id}.md"
+                if md_file_path.exists():
+                    os.remove(md_file_path)
+                    logger.info(f"Associated .md file for shift {selected_id} deleted.")
+                else:
+                    logger.warning(f"No .md file found for shift {selected_id}.")
+
+                self.populate_tree()
+                self.root.focus_force()
+                logger.info(f"Shift {selected_id} deleted.")
+            except KeyError:
+                messagebox.showerror("Error", f"Shift with ID {selected_id} not found in the data.")
+                logger.error(f"Failed to delete shift {selected_id}: Shift not found in data.")
+            except Exception as e:
+                messagebox.showerror("Error", f"An error occurred while deleting the shift: {str(e)}")
+                logger.error(f"Failed to delete shift {selected_id}: {str(e)}")
 
     def save_data_and_update_view(self, notes_window):
         try:
@@ -834,140 +877,202 @@ class ShyftGUI:
         logger.info("Configuration saved.")
 
     def autologger(self, event=None):
-        model_id_response = simpledialog.askstring(
-            "Model ID", "Enter Model ID", parent=self.root
-        )
-        if not model_id_response:
-            return None
-        model_id = model_id_response.upper()
+        self.collected_data = []
+        
+        # Collect shared data for the shift
+        shared_data = self.collect_shared_data()
+        if shared_data is None:  # User cancelled
+            return
+        
+        self.attempt_task(shared_data)
 
-        project_id_response = simpledialog.askstring(
-            "Project ID", "Enter Project ID", parent=self.root
-        )
-        if not project_id_response:
-            return None
-        project_id = project_id_response.upper()
-
-        hourly_rate = simpledialog.askstring(
-            "Hourly rate", "Enter Hourly Rate", parent=self.root
-        )
-        try:
-            hourly_rate = float(hourly_rate)
-        except (TypeError, ValueError):
-            if not hourly_rate:
-                return
-            else:
-                messagebox.showerror(
-                    "Error", "Invalid hourly rate; please enter a numeric value."
-                )
+    def collect_shared_data(self):
+        shared_fields = [
+            ("Model ID", str.upper),  # Changed to str.upper
+            ("Project ID", str.upper),  # Changed to str.upper
+            ("Hourly Rate of Pay", float)
+        ]
+        
+        shared_data = {}
+        for field, transform in shared_fields:
+            response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
+            if response is None:  # User clicked cancel
                 return None
+            try:
+                shared_data[field] = transform(response)
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid input for {field}")
+                return None
+        
+        return shared_data
 
-        notes_window = tk.Toplevel(self.root)
-        notes_window.title("Notes - Autologger")
-        if platform.system() == "Darwin":
-            notes_window.geometry("400x400")
-        else:
-            notes_window.geometry("450x450")
+    def attempt_task(self, shared_data):
+        # Collect data specific to this task
+        task_fields = [
+            ("Platform ID", str),
+            ("Permalink", str),
+            ("Response #1 ID", str),
+            ("Response #2 ID", str)
+        ]
+        
+        task_data = shared_data.copy()  # Start with shared data
+        for field, transform in task_fields:
+            response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
+            if response is None:  # User clicked cancel
+                self.finish_logging(cancel=True)
+                return
+            try:
+                task_data[field] = transform(response)
+            except ValueError:
+                messagebox.showerror("Error", f"Invalid input for {field}")
+                self.finish_logging(cancel=True)
+                return
 
-        text = Text(
-            notes_window,
-            wrap=tk.WORD,
-            height=1,
-        )
-        text.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Create custom window for Rank and Justification
+        custom_window = tk.Toplevel(self.root)
+        custom_window.title("Rank and Justification")
+        custom_window.geometry("400x300")
 
-        button_frame = tk.Frame(notes_window)
-        button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        # Rank selection
+        rank_frame = ttk.Frame(custom_window)
+        rank_frame.pack(pady=10)
+        rank_var = tk.StringVar()
+        rank_options = [
+            "(1) is much better than (2).",
+            "(1) is slightly better than (2).",
+            "The responses are of equal quality.",
+            "(2) is slightly better than (1).",
+            "(2) is much better than (1).",
+            "Task rejected for containing sensitive content."
+        ]
+        ttk.Label(rank_frame, text="Rank:").pack(side=tk.LEFT)
+        rank_dropdown = ttk.Combobox(rank_frame, textvariable=rank_var, values=rank_options, state="readonly", width=40)
+        rank_dropdown.pack(side=tk.LEFT)
+        rank_dropdown.set(rank_options[0])
 
-        def insert_divider():
-            divider = "_" * 50 + "\n"
-            text.insert(tk.INSERT, divider)
+        # Justification text box
+        justification_frame = ttk.Frame(custom_window)
+        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        ttk.Label(justification_frame, text="Justification:").pack()
+        justification_text = Text(justification_frame, wrap=tk.WORD, height=8)
+        justification_text.pack(fill=tk.BOTH, expand=True)
 
-        if self.timer_window is None or not tk.Toplevel.winfo_exists(
-            self.timer_window.root
-        ):
+        def submit_data():
+            task_data['Rank'] = rank_var.get()
+            task_data['Justification'] = justification_text.get("1.0", tk.END).strip()
+            custom_window.destroy()
+            self.collected_data.append(task_data)
+            self.ask_attempt_another(shared_data)
+
+        def cancel():
+            custom_window.destroy()
+            self.finish_logging(cancel=True)
+
+        # Buttons
+        button_frame = ttk.Frame(custom_window)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Submit", command=submit_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=cancel).pack(side=tk.LEFT, padx=5)
+
+        # Start the timer if it's not already running
+        if self.timer_window is None or not tk.Toplevel.winfo_exists(self.timer_window.root):
             timer_window = tk.Toplevel(self.root)
-            self.timer_window = TimerWindow(
-                timer_window, time_color=self.time_color, bg_color=self.bg_color
-            )
+            self.timer_window = TimerWindow(timer_window, time_color=self.time_color, bg_color=self.bg_color)
             self.timer_window.start()
             topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
             self.timer_window.root.attributes("-topmost", topmost_state)
             self.disable_theme_menu()
             self.enable_topmost_menu()
 
-        def submit_notes():
-            if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
-                self.timer_window.stop()
-                elapsed_time = self.timer_window.elapsed_time
+        custom_window.protocol("WM_DELETE_WINDOW", cancel)
+        custom_window.transient(self.root)
+        custom_window.grab_set()
+        self.root.wait_window(custom_window)
 
-                seconds_in_a_minute = 60
-                whole_minutes = elapsed_time.total_seconds() // seconds_in_a_minute
-                duration_hrs = whole_minutes / 60
+    def ask_attempt_another(self, shared_data):
+        response = messagebox.askyesno("Attempt Another Task", "Would you like to attempt another task?")
+        if response:
+            self.attempt_task(shared_data)
+        else:
+            self.finish_logging()
 
-                gross_pay = duration_hrs * hourly_rate
-
-                new_id = max([int(x) for x in self.data.keys()], default=0) + 1
-                formatted_id = self.format_id(new_id)
-
-                if not LOGS_DIR.exists():
-                    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
-                log_file_path = LOGS_DIR / f"{formatted_id}.md"
-                with open(log_file_path, "w") as file:
-                    file.write(text.get("1.0", tk.END))
-
-                lock = threading.Lock()
-
-                with lock:
-                    self.data[formatted_id] = {
-                        "Date": datetime.now().strftime("%Y-%m-%d"),
-                        "Model ID": model_id,
-                        "Project ID": project_id,
-                        "In (hh:mm)": (datetime.now() - elapsed_time).strftime("%H:%M"),
-                        "Out (hh:mm)": datetime.now().strftime("%H:%M"),
-                        "Duration (hrs)": f"{duration_hrs:.2f}",
-                        "Hourly rate": f"{hourly_rate:.2f}",
-                        "Gross pay": f"{gross_pay:.2f}",
-                    }
-                    save_thread = threading.Thread(
-                        target=lambda: self.save_data_and_update_view(notes_window)
-                    )
-                    save_thread.start()
-                messagebox.showinfo("Success", "Shift logged successfully.")
-                logger.info("Shift logged successfully.")
-            else:
-                messagebox.showerror("Error", "Timer is not running.")
-                logger.error("Failed to log shift: Timer is not running.")
-
-        def cancel_notes():
+    def finish_logging(self, cancel=False):
+        if cancel or not self.collected_data:
             if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
                 self.timer_window.reset()
                 self.timer_window.on_close()
                 self.timer_window = None
                 self.enable_theme_menu()
                 self.disable_topmost_menu()
-            notes_window.destroy()
-            self.root.focus_force()
+            if cancel:
+                messagebox.showinfo("Cancelled", "Autologger process cancelled.")
+        else:
+            self.log_shift()
 
-        notes_window.protocol("WM_DELETE_WINDOW", cancel_notes)
+    def log_shift(self):
+        if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
+            self.timer_window.stop()
+            elapsed_time = self.timer_window.elapsed_time
 
-        tk.Button(
-            button_frame,
-            text="Submit",
-            command=submit_notes,
-        ).pack(side=tk.RIGHT, padx=5, pady=5)
-        tk.Button(
-            button_frame,
-            text="Cancel",
-            command=cancel_notes,
-        ).pack(side=tk.LEFT, padx=5, pady=5)
-        tk.Button(
-            button_frame,
-            text="Insert Divider",
-            command=insert_divider,
-        ).pack(side=tk.LEFT, padx=5, pady=5)
-        logger.debug("Autologger window displayed.")
+            seconds_in_a_minute = 60
+            whole_minutes = elapsed_time.total_seconds() // seconds_in_a_minute
+            duration_hrs = whole_minutes / 60
+
+            gross_pay = duration_hrs * self.collected_data[0]['Hourly Rate of Pay']
+
+            new_id = max([int(x) for x in self.data['data'].keys()], default=0) + 1
+            formatted_id = self.format_id(new_id)
+
+            if not LOGS_DIR.exists():
+                LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+            log_file_path = LOGS_DIR / f"{formatted_id}.md"
+            with open(log_file_path, "w") as file:
+                file.write(f"# `{formatted_id}.md`\n\n----\n\n\n")
+                for i, task in enumerate(self.collected_data, start=1):
+                    file.write(f"{i}. `{task['Platform ID']}`\n\n")  # Use Platform ID as identifier
+                    file.write("[Permalink]\n")
+                    file.write(f"{task['Permalink']}\n\n")
+                    file.write("[Response IDs]\n")
+                    file.write(f"1. `{task['Response #1 ID']}`\n")
+                    file.write(f"2. `{task['Response #2 ID']}`\n\n")
+                    file.write("[Rank]\n")
+                    file.write(f"{task['Rank']}\n\n")
+                    file.write("[Justification]\n")
+                    file.write(f"{task['Justification']}\n\n")
+                    if i < len(self.collected_data):
+                        file.write("\n")
+
+            lock = threading.Lock()
+
+            with lock:
+                self.data['data'][formatted_id] = {
+                    "Date": datetime.now().strftime("%Y-%m-%d"),
+                    "Model ID": self.collected_data[0]['Model ID'],
+                    "Project ID": self.collected_data[0]['Project ID'],
+                    "In (hh:mm)": (datetime.now() - elapsed_time).strftime("%H:%M"),
+                    "Out (hh:mm)": datetime.now().strftime("%H:%M"),
+                    "Duration (hrs)": f"{duration_hrs:.2f}",
+                    "Hourly rate": f"{self.collected_data[0]['Hourly Rate of Pay']:.2f}",
+                    "Gross pay": f"{gross_pay:.2f}",
+                    "Tasks completed": len(self.collected_data)
+                }
+                self.save_data()
+                self.root.after(0, self.populate_tree)  # Schedule GUI refresh
+
+            messagebox.showinfo("Success", f"Shift logged successfully. {len(self.collected_data)} tasks completed.")
+            logger.info(f"Shift logged successfully. {len(self.collected_data)} tasks completed.")
+        else:
+            messagebox.showerror("Error", "Timer is not running.")
+            logger.error("Failed to log shift: Timer is not running.")
+
+        if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
+            self.timer_window.reset()
+            self.timer_window.on_close()
+            self.timer_window = None
+            self.enable_theme_menu()
+            self.disable_topmost_menu()
+
 
     def format_id(self, id):
         return f"{id:04d}"
