@@ -25,11 +25,8 @@ else:
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOGS_DIR / 'app.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(LOGS_DIR / "app.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -58,14 +55,17 @@ DEFAULT_SHIFT_STRUCTURE = {
 
 logger.debug("Configuration and paths setup completed.")
 
+
 def get_modifier_key():
     if platform.system() == "Darwin":
         return "Command"
     else:
         return "Control"
 
+
 modifier_key = get_modifier_key()
 logger.debug(f"Modifier key set to {modifier_key}.")
+
 
 def format_to_two_decimals(value):
     try:
@@ -75,6 +75,7 @@ def format_to_two_decimals(value):
     except ValueError:
         logger.error(f"ValueError: Unable to format value {value} to two decimals.")
         return value
+
 
 def close_current_window(event):
     widget = event.widget
@@ -86,10 +87,12 @@ def close_current_window(event):
             toplevel.destroy()
     logger.debug("Closed current window.")
 
+
 def minimize_window(event=None):
     widget = event.widget.winfo_toplevel()
     widget.iconify()
     logger.debug("Minimized window.")
+
 
 class TimerWindow:
     def __init__(self, root, time_color="#A78C7B", bg_color="#FFBE98"):
@@ -101,11 +104,15 @@ class TimerWindow:
             self.config.add_section("Window")
             self.custom_width = 200
             self.custom_height = 100
-            logger.debug("No 'Window' section found in config file, using default dimensions.")
+            logger.debug(
+                "No 'Window' section found in config file, using default dimensions."
+            )
         else:
             self.custom_width = self.config.getint("Window", "width", fallback=200)
             self.custom_height = self.config.getint("Window", "height", fallback=100)
-            logger.debug(f"Loaded custom dimensions from config file: width={self.custom_width}, height={self.custom_height}")
+            logger.debug(
+                f"Loaded custom dimensions from config file: width={self.custom_width}, height={self.custom_height}"
+            )
 
         self.root.title("Timer")
         self.root.geometry(f"{self.custom_width}x{self.custom_height}")
@@ -173,7 +180,9 @@ class TimerWindow:
         button_frame.grid_columnconfigure(1, weight=1)
         button_frame.grid_columnconfigure(2, weight=1)
 
-        self.update_timer_thread = threading.Thread(target=self.update_timer, daemon=True)
+        self.update_timer_thread = threading.Thread(
+            target=self.update_timer, daemon=True
+        )
         self.update_timer_thread.start()
         logger.info("Timer window initialized.")
 
@@ -207,7 +216,9 @@ class TimerWindow:
                 current_time = datetime.now()
                 delta = current_time - self.last_time
                 elapsed = self.elapsed_time + delta
-                self.root.after(0, self.update_label, str(elapsed).split(".")[0].rjust(8, "0"))
+                self.root.after(
+                    0, self.update_label, str(elapsed).split(".")[0].rjust(8, "0")
+                )
             time.sleep(0.1)
 
     def on_close(self):
@@ -216,9 +227,12 @@ class TimerWindow:
         self.config.set("Window", "height", str(self.root.winfo_height()))
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
-        logger.debug(f"Timer window dimensions saved: width={self.root.winfo_width()}, height={self.root.winfo_height()}")
+        logger.debug(
+            f"Timer window dimensions saved: width={self.root.winfo_width()}, height={self.root.winfo_height()}"
+        )
         self.root.after(0, self.root.destroy)
         logger.debug("Timer window closed.")
+
 
 class ShyftGUI:
     def __init__(self, root):
@@ -237,7 +251,9 @@ class ShyftGUI:
             self.selected_theme = "aqua"
         else:
             self.selected_theme = "default"
-        self.timer_topmost = self.config.getboolean("Theme", "timer_topmost", fallback=False)
+        self.timer_topmost = self.config.getboolean(
+            "Theme", "timer_topmost", fallback=False
+        )
         self.timer_topmost_var = tk.BooleanVar(value=self.timer_topmost)
         self.configure_styles()
         self.data = {"data": {}}
@@ -284,7 +300,7 @@ class ShyftGUI:
     def load_data(self):
         try:
             if self.data_file_path.exists():
-                with open(self.data_file_path, 'r') as f:
+                with open(self.data_file_path, "r") as f:
                     self.data = json.load(f)
             else:
                 self.data = {"data": {}}
@@ -296,16 +312,14 @@ class ShyftGUI:
             logger.error(f"Failed to load data file: {e}")
             self.data = {"data": {}}
 
-
     def save_data(self):
         try:
-            with open(self.data_file_path, 'w') as f:
+            with open(self.data_file_path, "w") as f:
                 json.dump(self.data, f, indent=4)
             logger.debug("Data saved successfully.")
         except Exception as e:
             logger.error(f"Failed to save data: {e}")
             messagebox.showerror("Error", f"Failed to save data: {e}")
-
 
     def create_widgets(self):
         self.tree = ttk.Treeview(
@@ -370,12 +384,14 @@ class ShyftGUI:
     def populate_tree(self):
         for i in self.tree.get_children():
             self.tree.delete(i)
-        
+
         # Sort the data keys (shift IDs) in descending order
-        sorted_keys = sorted(self.data['data'].keys(), key=lambda x: int(x), reverse=True)
-        
+        sorted_keys = sorted(
+            self.data["data"].keys(), key=lambda x: int(x), reverse=True
+        )
+
         for id in sorted_keys:
-            shift = self.data['data'][id]
+            shift = self.data["data"][id]
             self.tree.insert(
                 "",
                 "end",
@@ -390,18 +406,17 @@ class ShyftGUI:
                     shift.get("Duration (hrs)", "N/A"),
                     shift.get("Hourly rate", "N/A"),
                     shift.get("Gross pay", "N/A"),
-                    shift.get("Tasks completed", "N/A")
+                    shift.get("Tasks completed", "N/A"),
                 ),
             )
-        
+
         # Select the first item (most recent shift)
         first_item = self.tree.get_children()
         if first_item:
             self.tree.selection_set(first_item[0])
             self.tree.focus(first_item[0])
-        
-        logger.debug("Tree view populated with updated data.")
 
+        logger.debug("Tree view populated with updated data.")
 
     def calculate_totals(self, event=None):
         number_of_shifts = len(self.data.values())
@@ -475,8 +490,12 @@ class ShyftGUI:
                 for f in os.scandir(LOGS_DIR)
                 if f.is_file() and not f.name.startswith(".")
             ],
-            key=lambda x: int(re.search(r'^(\d+)', x.name).group(1) if re.search(r'^(\d+)', x.name) else 0),
-            reverse=True
+            key=lambda x: int(
+                re.search(r"^(\d+)", x.name).group(1)
+                if re.search(r"^(\d+)", x.name)
+                else 0
+            ),
+            reverse=True,
         )
 
         for log_file in log_files:
@@ -525,7 +544,7 @@ class ShyftGUI:
         # Wait for the window to be fully created and then set focus again
         log_window.update()
         log_tree.focus_set()
-        
+
     def validate_time_format(self, time_str):
         try:
             datetime.strptime(time_str, "%H:%M")
@@ -578,9 +597,11 @@ class ShyftGUI:
 
             lock = threading.Lock()
             with lock:
-                self.data['data'][formatted_id] = new_data
+                self.data["data"][formatted_id] = new_data
                 self.save_data()
-            self.root.after(0, self.populate_tree)  # This will refresh the tree and select the first item
+            self.root.after(
+                0, self.populate_tree
+            )  # This will refresh the tree and select the first item
             self.entries["window"].destroy()
             messagebox.showinfo("Success", "Shift logged successfully.")
             self.root.focus_force()
@@ -646,7 +667,7 @@ class ShyftGUI:
             messagebox.showerror("Error", "Please select a shift to edit.")
             return
         selected_id = selected_item[0]
-        shift = self.data['data'].get(selected_id)
+        shift = self.data["data"].get(selected_id)
 
         window = tk.Toplevel(self.root)
         window.title("Edit Shift")
@@ -699,7 +720,7 @@ class ShyftGUI:
             command=lambda: self.submit_action_edit(
                 window, entries, fields, selected_id
             ),
-            style="TButton"
+            style="TButton",
         )
 
         def submit_and_close(event=None):
@@ -722,7 +743,7 @@ class ShyftGUI:
 
             lock = threading.Lock()
             with lock:
-                self.data['data'][selected_id] = updated_data
+                self.data["data"][selected_id] = updated_data
 
             save_thread = threading.Thread(
                 target=lambda: self.save_and_update_view(root)
@@ -759,7 +780,7 @@ class ShyftGUI:
         if response:
             try:
                 # Delete from data structure
-                del self.data['data'][selected_id]
+                del self.data["data"][selected_id]
                 self.save_data()
 
                 # Delete associated .md file
@@ -774,10 +795,16 @@ class ShyftGUI:
                 self.root.focus_force()
                 logger.info(f"Shift {selected_id} deleted.")
             except KeyError:
-                messagebox.showerror("Error", f"Shift with ID {selected_id} not found in the data.")
-                logger.error(f"Failed to delete shift {selected_id}: Shift not found in data.")
+                messagebox.showerror(
+                    "Error", f"Shift with ID {selected_id} not found in the data."
+                )
+                logger.error(
+                    f"Failed to delete shift {selected_id}: Shift not found in data."
+                )
             except Exception as e:
-                messagebox.showerror("Error", f"An error occurred while deleting the shift: {str(e)}")
+                messagebox.showerror(
+                    "Error", f"An error occurred while deleting the shift: {str(e)}"
+                )
                 logger.error(f"Failed to delete shift {selected_id}: {str(e)}")
 
     def save_data_and_update_view(self, notes_window):
@@ -804,10 +831,14 @@ class ShyftGUI:
         if self.timer_window:
             self.timer_window.on_close()
             self.timer_window = TimerWindow(
-                tk.Toplevel(self.root), time_color=self.time_color, bg_color=self.bg_color
+                tk.Toplevel(self.root),
+                time_color=self.time_color,
+                bg_color=self.bg_color,
             )
             self.timer_window.start()
-            topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
+            topmost_state = self.config.getboolean(
+                "Theme", "timer_topmost", fallback=False
+            )
             self.timer_window.root.attributes("-topmost", topmost_state)
             logger.info("Timer window reinitialized with new settings.")
 
@@ -852,7 +883,9 @@ class ShyftGUI:
             if not response:
                 return
         logger.debug("Entering choose_btn_text_color.")
-        color_code = colorchooser.askcolor(title="Choose Stopclock Button Text Color")[1]
+        color_code = colorchooser.askcolor(title="Choose Stopclock Button Text Color")[
+            1
+        ]
         if color_code:
             self.btn_text_color = color_code
             self.save_config()
@@ -868,8 +901,12 @@ class ShyftGUI:
         self.config.set("Colors", "bg_color", self.bg_color)
         self.config.set("Colors", "btn_text_color", self.btn_text_color)
         if self.timer_window:
-            self.config.set("Window", "width", str(self.timer_window.root.winfo_width()))
-            self.config.set("Window", "height", str(self.timer_window.root.winfo_height()))
+            self.config.set(
+                "Window", "width", str(self.timer_window.root.winfo_width())
+            )
+            self.config.set(
+                "Window", "height", str(self.timer_window.root.winfo_height())
+            )
         with open(CONFIG_FILE, "w") as config_file:
             self.config.write(config_file)
         self.update_styles()
@@ -878,21 +915,21 @@ class ShyftGUI:
 
     def autologger(self, event=None):
         self.collected_data = []
-        
+
         # Collect shared data for the shift
         shared_data = self.collect_shared_data()
         if shared_data is None:  # User cancelled
             return
-        
+
         self.attempt_task(shared_data)
 
     def collect_shared_data(self):
         shared_fields = [
             ("Model ID", str.upper),  # Changed to str.upper
             ("Project ID", str.upper),  # Changed to str.upper
-            ("Hourly Rate of Pay", float)
+            ("Hourly Rate of Pay", float),
         ]
-        
+
         shared_data = {}
         for field, transform in shared_fields:
             response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
@@ -903,7 +940,7 @@ class ShyftGUI:
             except ValueError:
                 messagebox.showerror("Error", f"Invalid input for {field}")
                 return None
-        
+
         return shared_data
 
     def attempt_task(self, shared_data):
@@ -912,9 +949,9 @@ class ShyftGUI:
             ("Platform ID", str),
             ("Permalink", str),
             ("Response #1 ID", str),
-            ("Response #2 ID", str)
+            ("Response #2 ID", str),
         ]
-        
+
         task_data = shared_data.copy()  # Start with shared data
         for field, transform in task_fields:
             response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
@@ -943,10 +980,16 @@ class ShyftGUI:
             "The responses are of equal quality.",
             "(2) is slightly better than (1).",
             "(2) is much better than (1).",
-            "Task rejected for containing sensitive content."
+            "Task rejected for containing sensitive content.",
         ]
         ttk.Label(rank_frame, text="Rank:").pack(side=tk.LEFT)
-        rank_dropdown = ttk.Combobox(rank_frame, textvariable=rank_var, values=rank_options, state="readonly", width=40)
+        rank_dropdown = ttk.Combobox(
+            rank_frame,
+            textvariable=rank_var,
+            values=rank_options,
+            state="readonly",
+            width=40,
+        )
         rank_dropdown.pack(side=tk.LEFT)
         rank_dropdown.set(rank_options[0])
 
@@ -958,8 +1001,8 @@ class ShyftGUI:
         justification_text.pack(fill=tk.BOTH, expand=True)
 
         def submit_data():
-            task_data['Rank'] = rank_var.get()
-            task_data['Justification'] = justification_text.get("1.0", tk.END).strip()
+            task_data["Rank"] = rank_var.get()
+            task_data["Justification"] = justification_text.get("1.0", tk.END).strip()
             custom_window.destroy()
             self.collected_data.append(task_data)
             self.ask_attempt_another(shared_data)
@@ -971,15 +1014,25 @@ class ShyftGUI:
         # Buttons
         button_frame = ttk.Frame(custom_window)
         button_frame.pack(pady=10)
-        ttk.Button(button_frame, text="Submit", command=submit_data).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=cancel).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Submit", command=submit_data).pack(
+            side=tk.LEFT, padx=5
+        )
+        ttk.Button(button_frame, text="Cancel", command=cancel).pack(
+            side=tk.LEFT, padx=5
+        )
 
         # Start the timer if it's not already running
-        if self.timer_window is None or not tk.Toplevel.winfo_exists(self.timer_window.root):
+        if self.timer_window is None or not tk.Toplevel.winfo_exists(
+            self.timer_window.root
+        ):
             timer_window = tk.Toplevel(self.root)
-            self.timer_window = TimerWindow(timer_window, time_color=self.time_color, bg_color=self.bg_color)
+            self.timer_window = TimerWindow(
+                timer_window, time_color=self.time_color, bg_color=self.bg_color
+            )
             self.timer_window.start()
-            topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
+            topmost_state = self.config.getboolean(
+                "Theme", "timer_topmost", fallback=False
+            )
             self.timer_window.root.attributes("-topmost", topmost_state)
             self.disable_theme_menu()
             self.enable_topmost_menu()
@@ -990,7 +1043,9 @@ class ShyftGUI:
         self.root.wait_window(custom_window)
 
     def ask_attempt_another(self, shared_data):
-        response = messagebox.askyesno("Attempt Another Task", "Would you like to attempt another task?")
+        response = messagebox.askyesno(
+            "Attempt Another Task", "Would you like to attempt another task?"
+        )
         if response:
             self.attempt_task(shared_data)
         else:
@@ -1018,9 +1073,9 @@ class ShyftGUI:
             whole_minutes = elapsed_time.total_seconds() // seconds_in_a_minute
             duration_hrs = whole_minutes / 60
 
-            gross_pay = duration_hrs * self.collected_data[0]['Hourly Rate of Pay']
+            gross_pay = duration_hrs * self.collected_data[0]["Hourly Rate of Pay"]
 
-            new_id = max([int(x) for x in self.data['data'].keys()], default=0) + 1
+            new_id = max([int(x) for x in self.data["data"].keys()], default=0) + 1
             formatted_id = self.format_id(new_id)
 
             if not LOGS_DIR.exists():
@@ -1030,7 +1085,9 @@ class ShyftGUI:
             with open(log_file_path, "w") as file:
                 file.write(f"# `{formatted_id}.md`\n\n----\n\n\n")
                 for i, task in enumerate(self.collected_data, start=1):
-                    file.write(f"{i}. `{task['Platform ID']}`\n\n")  # Use Platform ID as identifier
+                    file.write(
+                        f"{i}. `{task['Platform ID']}`\n\n"
+                    )  # Use Platform ID as identifier
                     file.write("[Permalink]\n")
                     file.write(f"{task['Permalink']}\n\n")
                     file.write("[Response IDs]\n")
@@ -1046,22 +1103,27 @@ class ShyftGUI:
             lock = threading.Lock()
 
             with lock:
-                self.data['data'][formatted_id] = {
+                self.data["data"][formatted_id] = {
                     "Date": datetime.now().strftime("%Y-%m-%d"),
-                    "Model ID": self.collected_data[0]['Model ID'],
-                    "Project ID": self.collected_data[0]['Project ID'],
+                    "Model ID": self.collected_data[0]["Model ID"],
+                    "Project ID": self.collected_data[0]["Project ID"],
                     "In (hh:mm)": (datetime.now() - elapsed_time).strftime("%H:%M"),
                     "Out (hh:mm)": datetime.now().strftime("%H:%M"),
                     "Duration (hrs)": f"{duration_hrs:.2f}",
                     "Hourly rate": f"{self.collected_data[0]['Hourly Rate of Pay']:.2f}",
                     "Gross pay": f"{gross_pay:.2f}",
-                    "Tasks completed": len(self.collected_data)
+                    "Tasks completed": len(self.collected_data),
                 }
                 self.save_data()
                 self.root.after(0, self.populate_tree)  # Schedule GUI refresh
 
-            messagebox.showinfo("Success", f"Shift logged successfully. {len(self.collected_data)} tasks completed.")
-            logger.info(f"Shift logged successfully. {len(self.collected_data)} tasks completed.")
+            messagebox.showinfo(
+                "Success",
+                f"Shift logged successfully. {len(self.collected_data)} tasks completed.",
+            )
+            logger.info(
+                f"Shift logged successfully. {len(self.collected_data)} tasks completed."
+            )
         else:
             messagebox.showerror("Error", "Timer is not running.")
             logger.error("Failed to log shift: Timer is not running.")
@@ -1072,7 +1134,6 @@ class ShyftGUI:
             self.timer_window = None
             self.enable_theme_menu()
             self.disable_topmost_menu()
-
 
     def format_id(self, id):
         return f"{id:04d}"
@@ -1145,6 +1206,7 @@ class ShyftGUI:
         )
         self.menu_bar.add_cascade(label="Settings", menu=self.settings_menu)
 
+
 def run_tkinter_app():
     root = tk.Tk()
     style = ttk.Style()
@@ -1167,10 +1229,12 @@ def run_tkinter_app():
 
     root.mainloop()
 
+
 def main():
     process = multiprocessing.Process(target=run_tkinter_app)
     process.start()
     logger.info("Application started.")
+
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

@@ -11,11 +11,11 @@ from setuptools import setup
 
 APP = ["Shyft.py"]
 DATA_FILES = [
-    ('', ['data.json']),
+    ("", ["data.json"]),
 ]
 OPTIONS = {
     "iconfile": "resources/icon.icns",
-    'includes': ['tkinter', 'multiprocessing'],  # Include necessary modules
+    "includes": ["tkinter", "multiprocessing"],  # Include necessary modules
     "plist": {
         "CFBundleName": "Shyft",
         "CFBundleIdentifier": "com.enclaim.shyft",
@@ -27,7 +27,6 @@ OPTIONS = {
         "NSSupportsAutomaticGraphicsSwitching": "true",
         "NSAppSleepDisabled": "true",
         "NSHighResolutionCapable": "true",
-        
     },
 }
 
