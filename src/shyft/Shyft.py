@@ -927,7 +927,6 @@ class ShyftGUI:
         shared_fields = [
             ("Model ID", str.upper),
             ("Project ID", str.upper),
-            ("Platform ID", str),
             ("Hourly Rate of Pay", float),
         ]
 
@@ -1017,6 +1016,7 @@ class ShyftGUI:
 
         # Collect data specific to this task
         task_fields = [
+            ("Platform ID", str),
             ("Permalink", str),
             ("Response #1 ID", str),
             ("Response #2 ID", str)
