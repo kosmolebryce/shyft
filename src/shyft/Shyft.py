@@ -925,8 +925,9 @@ class ShyftGUI:
 
     def collect_shared_data(self):
         shared_fields = [
-            ("Model ID", str.upper),  # Changed to str.upper
-            ("Project ID", str.upper),  # Changed to str.upper
+            ("Model ID", str.upper),
+            ("Project ID", str.upper),
+            ("Platform ID", str),
             ("Hourly Rate of Pay", float),
         ]
 
@@ -943,16 +944,85 @@ class ShyftGUI:
 
         return shared_data
 
+    def create_justification_window(self, shared_data):
+        justification_window = tk.Toplevel(self.root)
+        justification_window.title("Rank and Justification")
+        justification_window.geometry("400x300")
+        justification_window.protocol("WM_DELETE_WINDOW", lambda: self.on_justification_close(justification_window))
+
+        # Rank selection
+        rank_frame = ttk.Frame(justification_window)
+        rank_frame.pack(pady=10)
+        rank_var = tk.StringVar()
+        rank_options = [
+            "(1) is much better than (2)",
+            "(1) is slightly better than (2)",
+            "The responses are of equal quality",
+            "(2) is slightly better than (1)",
+            "(2) is much better than (1)",
+            "Task rejected for containing sensitive content"
+        ]
+        ttk.Label(rank_frame, text="Rank:").pack(side=tk.LEFT)
+        rank_dropdown = ttk.Combobox(rank_frame, textvariable=rank_var, values=rank_options, state="readonly", width=40)
+        rank_dropdown.pack(side=tk.LEFT)
+        rank_dropdown.set(rank_options[0])
+
+        # Justification text box
+        justification_frame = ttk.Frame(justification_window)
+        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        ttk.Label(justification_frame, text="Justification:").pack()
+        justification_text = Text(justification_frame, wrap=tk.WORD, height=8)
+        justification_text.pack(fill=tk.BOTH, expand=True)
+
+        def submit_data():
+            task_data = shared_data.copy()
+            task_data['Rank'] = rank_var.get()
+            task_data['Justification'] = justification_text.get("1.0", tk.END).strip()
+            self.collected_data.append(task_data)
+            justification_window.destroy()
+            self.ask_attempt_another(shared_data)
+
+        # Buttons
+        button_frame = ttk.Frame(justification_window)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="Submit", command=submit_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=lambda: self.on_justification_close(justification_window)).pack(side=tk.LEFT, padx=5)
+
+        # Center the window on the screen
+        justification_window.update_idletasks()
+        width = justification_window.winfo_width()
+        height = justification_window.winfo_height()
+        x = (justification_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (justification_window.winfo_screenheight() // 2) - (height // 2)
+        justification_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+
+        justification_window.focus_set()
+        return justification_window
+
+    def on_justification_close(self, window):
+        if messagebox.askyesno("Confirm", "Are you sure you want to cancel? This will end the current shift logging process."):
+            window.destroy()
+            self.finish_logging(cancel=True)
+
     def attempt_task(self, shared_data):
+        # Start the timer if it's not already running
+        if self.timer_window is None or not tk.Toplevel.winfo_exists(self.timer_window.root):
+            timer_window = tk.Toplevel(self.root)
+            self.timer_window = TimerWindow(timer_window, time_color=self.time_color, bg_color=self.bg_color)
+            self.timer_window.start()
+            topmost_state = self.config.getboolean("Theme", "timer_topmost", fallback=False)
+            self.timer_window.root.attributes("-topmost", topmost_state)
+            self.disable_theme_menu()
+            self.enable_topmost_menu()
+
         # Collect data specific to this task
         task_fields = [
-            ("Platform ID", str),
             ("Permalink", str),
             ("Response #1 ID", str),
-            ("Response #2 ID", str),
+            ("Response #2 ID", str)
         ]
-
-        task_data = shared_data.copy()  # Start with shared data
+        
+        task_data = shared_data.copy()
         for field, transform in task_fields:
             response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
             if response is None:  # User clicked cancel
@@ -965,91 +1035,8 @@ class ShyftGUI:
                 self.finish_logging(cancel=True)
                 return
 
-        # Create custom window for Rank and Justification
-        custom_window = tk.Toplevel(self.root)
-        custom_window.title("Rank and Justification")
-        custom_window.geometry("400x300")
-
-        # Rank selection
-        rank_frame = ttk.Frame(custom_window)
-        rank_frame.pack(pady=10)
-        rank_var = tk.StringVar()
-        rank_options = [
-            "(1) is much better than (2).",
-            "(1) is slightly better than (2).",
-            "The responses are of equal quality.",
-            "(2) is slightly better than (1).",
-            "(2) is much better than (1).",
-            "Task rejected for containing sensitive content.",
-        ]
-        ttk.Label(rank_frame, text="Rank:").pack(side=tk.LEFT)
-        rank_dropdown = ttk.Combobox(
-            rank_frame,
-            textvariable=rank_var,
-            values=rank_options,
-            state="readonly",
-            width=40,
-        )
-        rank_dropdown.pack(side=tk.LEFT)
-        rank_dropdown.set(rank_options[0])
-
-        # Justification text box
-        justification_frame = ttk.Frame(custom_window)
-        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True)
-        ttk.Label(justification_frame, text="Justification:").pack()
-        justification_text = Text(justification_frame, wrap=tk.WORD, height=8)
-        justification_text.pack(fill=tk.BOTH, expand=True)
-
-        def submit_data():
-            task_data["Rank"] = rank_var.get()
-            task_data["Justification"] = justification_text.get("1.0", tk.END).strip()
-            custom_window.destroy()
-            self.collected_data.append(task_data)
-            self.ask_attempt_another(shared_data)
-
-        def cancel():
-            custom_window.destroy()
-            self.finish_logging(cancel=True)
-
-        # Buttons
-        button_frame = ttk.Frame(custom_window)
-        button_frame.pack(pady=10)
-        ttk.Button(button_frame, text="Submit", command=submit_data).pack(
-            side=tk.LEFT, padx=5
-        )
-        ttk.Button(button_frame, text="Cancel", command=cancel).pack(
-            side=tk.LEFT, padx=5
-        )
-
-        # Start the timer if it's not already running
-        if self.timer_window is None or not tk.Toplevel.winfo_exists(
-            self.timer_window.root
-        ):
-            timer_window = tk.Toplevel(self.root)
-            self.timer_window = TimerWindow(
-                timer_window, time_color=self.time_color, bg_color=self.bg_color
-            )
-            self.timer_window.start()
-            topmost_state = self.config.getboolean(
-                "Theme", "timer_topmost", fallback=False
-            )
-            self.timer_window.root.attributes("-topmost", topmost_state)
-            self.disable_theme_menu()
-            self.enable_topmost_menu()
-
-        custom_window.protocol("WM_DELETE_WINDOW", cancel)
-        custom_window.transient(self.root)
-        custom_window.grab_set()
-        self.root.wait_window(custom_window)
-
-    def ask_attempt_another(self, shared_data):
-        response = messagebox.askyesno(
-            "Attempt Another Task", "Would you like to attempt another task?"
-        )
-        if response:
-            self.attempt_task(shared_data)
-        else:
-            self.finish_logging()
+        justification_window = self.create_justification_window(task_data)
+        self.root.wait_window(justification_window)
 
     def finish_logging(self, cancel=False):
         if cancel or not self.collected_data:
@@ -1063,6 +1050,19 @@ class ShyftGUI:
                 messagebox.showinfo("Cancelled", "Autologger process cancelled.")
         else:
             self.log_shift()
+            
+    def cancel():
+        custom_window.destroy()
+        self.finish_logging(cancel=True)
+
+    def ask_attempt_another(self, shared_data):
+        response = messagebox.askyesno(
+            "Attempt Another Task", "Would you like to attempt another task?"
+        )
+        if response:
+            self.attempt_task(shared_data)
+        else:
+            self.finish_logging()
 
     def log_shift(self):
         if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
