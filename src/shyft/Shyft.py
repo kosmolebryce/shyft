@@ -91,7 +91,7 @@ def close_current_window(event):
 def minimize_window(event=None):
     widget = event.widget.winfo_toplevel()
     widget.iconify()
-    logger.debug("Minimized window.")
+    logger.debug(f"Minimized window: {widget}")
 
 
 class TimerWindow:
@@ -233,6 +233,56 @@ class TimerWindow:
         self.root.after(0, self.root.destroy)
         logger.debug("Timer window closed.")
 
+
+class IndependentAskString(tk.Toplevel):
+    def __init__(self, parent, title, prompt):
+        super().__init__(parent)
+        self.title(title)
+        self.result = None
+
+        self.geometry("300x150")
+        self.resizable(False, False)
+
+        main_frame = ttk.Frame(self, padding="20 20 20 0")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text=prompt).pack(pady=(0, 10))
+        self.entry = ttk.Entry(main_frame, width=40)
+        self.entry.pack(pady=(0, 20))
+
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=(0, 10))
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+
+        ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
+        ok_button.grid(row=0, column=0, padx=(0, 5), sticky='e')
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).grid(row=0, column=1, padx=(5, 0), sticky='w')
+
+        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
+        
+        # Center the dialog on the screen
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f'+{x}+{y}')
+
+        # Bind Enter key to OK button
+        self.bind('<Return>', lambda event: ok_button.invoke())
+
+        self.entry.focus_set()
+        self.grab_set()
+        self.wait_window()
+
+    def on_ok(self):
+        self.result = self.entry.get()
+        self.destroy()
+
+    def on_cancel(self):
+        self.result = None
+        self.destroy()                
 
 class ShyftGUI:
     def __init__(self, root):
@@ -949,6 +999,10 @@ class ShyftGUI:
         justification_window.geometry("400x300")
         justification_window.protocol("WM_DELETE_WINDOW", lambda: self.on_justification_close(justification_window))
 
+        # Bind modifier_key + w to close/cancel
+        justification_window.bind(f"<{modifier_key}-w>", lambda event: self.on_justification_close(justification_window))
+        justification_window.bind(f"<{modifier_key}-W>", lambda event: self.on_justification_close(justification_window))
+
         # Rank selection
         rank_frame = ttk.Frame(justification_window)
         rank_frame.pack(pady=10)
@@ -974,12 +1028,10 @@ class ShyftGUI:
         justification_text.pack(fill=tk.BOTH, expand=True)
 
         def submit_data():
-            task_data = shared_data.copy()
-            task_data['Rank'] = rank_var.get()
-            task_data['Justification'] = justification_text.get("1.0", tk.END).strip()
-            self.collected_data.append(task_data)
+            justification_window.result = shared_data.copy()
+            justification_window.result['Rank'] = rank_var.get()
+            justification_window.result['Justification'] = justification_text.get("1.0", tk.END).strip()
             justification_window.destroy()
-            self.ask_attempt_another(shared_data)
 
         # Buttons
         button_frame = ttk.Frame(justification_window)
@@ -997,11 +1049,22 @@ class ShyftGUI:
 
         justification_window.focus_set()
         return justification_window
-
+    
     def on_justification_close(self, window):
         if messagebox.askyesno("Confirm", "Are you sure you want to cancel? This will end the current shift logging process."):
+            window.result = None  # Set result to None to indicate cancellation
             window.destroy()
-            self.finish_logging(cancel=True)
+        # If 'No' is selected, do nothing and keep the window open
+
+    def ask_attempt_another(self, shared_data):
+        response = messagebox.askyesno(
+            "Attempt Another Task", "Would you like to attempt another task?"
+        )
+        if response:
+            self.attempt_task(shared_data)
+        else:
+            self.finish_logging()
+                
 
     def attempt_task(self, shared_data):
         # Start the timer if it's not already running
@@ -1024,20 +1087,29 @@ class ShyftGUI:
         
         task_data = shared_data.copy()
         for field, transform in task_fields:
-            response = simpledialog.askstring(field, f"Enter {field}", parent=self.root)
-            if response is None:  # User clicked cancel
+            dialog = IndependentAskString(self.root, field, f"Enter {field}")
+            if dialog.result is None:  # User clicked cancel
                 self.finish_logging(cancel=True)
                 return
             try:
-                task_data[field] = transform(response)
+                task_data[field] = transform(dialog.result)
             except ValueError:
                 messagebox.showerror("Error", f"Invalid input for {field}")
                 self.finish_logging(cancel=True)
                 return
 
+        # Create justification window
         justification_window = self.create_justification_window(task_data)
         self.root.wait_window(justification_window)
 
+        # Check the result after the justification window is closed
+        if hasattr(justification_window, 'result') and justification_window.result is not None:
+            self.collected_data.append(justification_window.result)
+            self.ask_attempt_another(shared_data)
+        else:
+            self.finish_logging(cancel=True)
+
+        
     def finish_logging(self, cancel=False):
         if cancel or not self.collected_data:
             if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
@@ -1226,7 +1298,6 @@ def run_tkinter_app():
     root.bind(f"<{modifier_key}-T>", app.calculate_totals)
     root.bind_all(f"<{modifier_key}-Q>", app.on_quit)
     root.bind_all(f"<{modifier_key}-q>", app.on_quit)
-
     root.mainloop()
 
 
