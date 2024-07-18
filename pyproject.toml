@@ -1,21 +1,23 @@
 [tool.poetry]
-name = "Shyft"
+name = "shyft"
 version = "0.1.0"
 description = "A shift-logging application designed to help data annotators more effectively manage their billing and service records."
 authors = ["K. LeBryce <kosmolebryce@pm.me>"]
 license = "MPL-2.0"
 readme = "README.md"
+packages = [{include = "shyft", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-tk = "^0.1.0"
-Tcl = "^0.2"
-pathlib = "^1.0.1"
+vypyr = {path = "../..", develop = true}  # This points to the root vypyr package
 
 [tool.poetry.group.dev.dependencies]
 poetry = "^1.8.3"
 black = "^24.4.2"
 py2app = "^0.28.8"
+
+[tool.poetry.scripts]
+shyft = "shyft.__main__:main"
 
 [build-system]
 requires = ["poetry-core"]
