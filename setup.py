@@ -1,5 +1,4 @@
 from setuptools import setup
-import os
 
 # Update to the correct relative path within subpackage
 APP = ["src/shyft/__main__.py"]
@@ -9,8 +8,10 @@ DATA_FILES = []
 OPTIONS = {
     "iconfile": "src/shyft/resources/icon.icns",  # Ensure the path is correct
     "includes": ["tkinter", "multiprocessing"],
+    "packages": ["shyft"],  # Include the shyft package
     "plist": {
         "CFBundleName": "Shyft",
+        "CFBundleDisplayName": "Shyft",
         "CFBundleIdentifier": "com.enclaim.shyft",
         "CFBundleVersion": "0.0.1",
         "CFBundleShortVersionString": "0.1",
@@ -24,8 +25,12 @@ OPTIONS = {
 }
 
 setup(
+    name="Shyft",
+    version="0.0.1",
     app=APP,
     data_files=DATA_FILES,
     options={"py2app": OPTIONS},
     setup_requires=["py2app"],
+    packages=["shyft"],  # Include the shyft package
+    package_dir={"shyft": "src/shyft"},  # Specify the package directory
 )

@@ -28,7 +28,7 @@ Path(app_config_dir).mkdir(parents=True, exist_ok=True)
 Path(app_cache_dir).mkdir(parents=True, exist_ok=True)
 
 # Initialize logging
-LOGS_DIR = Path(app_cache_dir) / "logs"
+LOGS_DIR = Path(app_data_dir) / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -470,57 +470,88 @@ class ShyftGUI:
         logger.debug("Tree view populated with updated data.")
 
     def calculate_totals(self, event=None):
-        number_of_shifts = len(self.data.values())
-        total_hours_worked = sum(
-            float(shift["Duration (hrs)"]) for shift in self.data.values()
-        )
-        total_gross_pay = sum(float(shift["Gross pay"]) for shift in self.data.values())
-        tax_liability = total_gross_pay * 0.27
-        net_income = total_gross_pay - tax_liability
+        logger.debug("Entering calculate_totals function")
+        
+        def create_totals_window():
+            try:
+                logger.debug("Starting to calculate totals")
+                
+                if not isinstance(self.data, dict) or "data" not in self.data:
+                    raise ValueError("Invalid data structure")
+                
+                number_of_shifts = len(self.data["data"])
+                logger.debug(f"Number of shifts: {number_of_shifts}")
+                
+                if number_of_shifts == 0:
+                    raise ValueError("No shifts found in data")
+                
+                try:
+                    total_hours_worked = sum(
+                        float(shift["Duration (hrs)"]) for shift in self.data["data"].values()
+                    )
+                    logger.debug(f"Total hours worked: {total_hours_worked}")
+                except (KeyError, ValueError) as e:
+                    logger.error(f"Error calculating total hours: {str(e)}")
+                    total_hours_worked = 0
+                
+                try:
+                    total_gross_pay = sum(float(shift["Gross pay"]) for shift in self.data["data"].values())
+                    logger.debug(f"Total gross pay: {total_gross_pay}")
+                except (KeyError, ValueError) as e:
+                    logger.error(f"Error calculating total gross pay: {str(e)}")
+                    total_gross_pay = 0
+                
+                tax_liability = total_gross_pay * 0.27
+                net_income = total_gross_pay - tax_liability
+                
+                logger.debug("Creating totals window")
+                totals_window = tk.Toplevel(self.root)
+                totals_window.title("Totals")
+                totals_window.bind(f"<{modifier_key}-w>", close_current_window)
+                totals_window.bind(f"<{modifier_key}-W>", close_current_window)
 
-        totals_window = tk.Toplevel(self.root)
-        totals_window.title("Totals")
-        totals_window.bind(f"<{modifier_key}-w>", close_current_window)
-        totals_window.bind(f"<{modifier_key}-W>", close_current_window)
+                columns = ("Description", "Value")
+                totals_tree = ttk.Treeview(totals_window, columns=columns, show="headings")
+                totals_tree.heading("Description", text="Description", anchor="w")
+                totals_tree.heading("Value", text="Value", anchor="w")
+                totals_tree.column("Description", anchor="w", width=200)
+                totals_tree.column("Value", anchor="e", width=150)
+                totals_tree.pack(expand=True, fill="both")
 
-        columns = ("Description", "Value")
-        totals_tree = ttk.Treeview(totals_window, columns=columns, show="headings")
-        totals_tree.heading("Description", text="Description", anchor="w")
-        totals_tree.heading("Value", text="Value", anchor="w")
-        totals_tree.column("Description", anchor="w", width=200)
-        totals_tree.column("Value", anchor="e", width=150)
-        totals_tree.pack(expand=True, fill="both")
+                totals_tree.insert("", "end", values=("Shifts Worked", number_of_shifts))
+                totals_tree.insert("", "end", values=("Total Hours Worked", f"{total_hours_worked:.2f}"))
+                totals_tree.insert("", "end", values=("Total Gross Pay", f"${total_gross_pay:.2f}"))
+                totals_tree.insert("", "end", values=("Estimated Tax Liability (27%)", f"${tax_liability:.2f}"))
+                totals_tree.insert("", "end", values=("Estimated Net Income", f"${net_income:.2f}"))
 
-        totals_tree.insert("", "end", values=("Shifts Worked", number_of_shifts))
-        totals_tree.insert(
-            "", "end", values=("Total Hours Worked", f"{total_hours_worked:.2f}")
-        )
-        totals_tree.insert(
-            "", "end", values=("Total Gross Pay", f"${total_gross_pay:.2f}")
-        )
-        totals_tree.insert(
-            "", "end", values=("Estimated Tax Liability (27%)", f"${tax_liability:.2f}")
-        )
-        totals_tree.insert(
-            "", "end", values=("Estimated Net Income", f"${net_income:.2f}")
-        )
+                def on_close():
+                    totals_window.destroy()
+                    self.root.focus_force()  # Return focus to the main window
 
-        def on_close():
-            totals_window.destroy()
-            self.root.focus_force()  # Return focus to the main window
+                totals_window.protocol("WM_DELETE_WINDOW", on_close)
+                totals_window.grab_set()
+                logger.debug("Totals window displayed successfully")
+                
+            except Exception as e:
+                logger.error(f"Error in calculate_totals: {str(e)}")
+                messagebox.showerror("Error", f"An error occurred while calculating totals: {str(e)}")
 
-        totals_window.protocol("WM_DELETE_WINDOW", on_close)
-        totals_window.grab_set()
-        totals_window.wait_window()
-        logger.debug("Totals window displayed.")
-
+        self.root.after(0, create_totals_window)
+        logger.debug("Exiting calculate_totals function")
+    
     def view_logs(self, event=None):
-        os.chdir(LOGS_DIR)
+        logger.debug(f"Opening logs directory: {LOGS_DIR}")
+        
+        if not LOGS_DIR.exists():
+            logger.warning(f"Logs directory does not exist: {LOGS_DIR}")
+            messagebox.showinfo("No Logs", "No log files found.")
+            return
+
         log_window = tk.Toplevel(self.root)
-        log_window.geometry("480x640")  # Correctly apply geometry
-        log_window.title("View Logs")   # Correctly set the title
-        log_window.bind("<Command-w>", close_current_window)
-        log_window.bind("<Command-W>", close_current_window)
+        log_window.geometry("480x640")
+        log_window.title("View Logs")
+        log_window.bind(f"<{modifier_key}-w>", close_current_window)
+        log_window.bind(f"<{modifier_key}-W>", close_current_window)
 
         tree_frame = ttk.Frame(log_window)
         tree_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
@@ -537,20 +568,18 @@ class ShyftGUI:
         # Get all log files and sort them
         log_files = sorted(
             [
-                f
-                for f in os.scandir(LOGS_DIR)
-                if f.is_file() and not f.name.startswith(".")
+                f.name
+                for f in LOGS_DIR.iterdir()
+                if f.is_file() and f.suffix == '.md'
             ],
-            key=lambda x: int(
-                re.search(r"^(\d+)", x.name).group(1)
-                if re.search(r"^(\d+)", x.name)
-                else 0
-            ),
-            reverse=True,
+            key=lambda x: os.path.getmtime(LOGS_DIR / x),
+            reverse=True
         )
 
+        logger.debug(f"Found {len(log_files)} log files")
+
         for log_file in log_files:
-            log_tree.insert("", "end", iid=log_file.name, values=[log_file.name])
+            log_tree.insert("", "end", iid=log_file, values=[log_file])
 
         text_frame = ttk.Frame(log_window)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
@@ -565,11 +594,16 @@ class ShyftGUI:
             if selected_item:
                 log_tree.item(selected_item[0], tags=("highlight",))
 
-                log_file_path = os.path.join(LOGS_DIR, selected_item[0])
-                with open(log_file_path, "r") as file:
-                    content = file.read()
-                text_widget.delete("1.0", tk.END)
-                text_widget.insert("1.0", content)
+                log_file_path = LOGS_DIR / selected_item[0]
+                try:
+                    with open(log_file_path, "r") as file:
+                        content = file.read()
+                    text_widget.delete("1.0", tk.END)
+                    text_widget.insert("1.0", content)
+                except Exception as e:
+                    logger.error(f"Error reading log file {log_file_path}: {str(e)}")
+                    text_widget.delete("1.0", tk.END)
+                    text_widget.insert("1.0", f"Error reading log file: {str(e)}")
 
         log_tree.bind("<<TreeviewSelect>>", on_log_selection)
 
@@ -595,7 +629,6 @@ class ShyftGUI:
         # Wait for the window to be fully created and then set focus again
         log_window.update()
         log_tree.focus_set()
-
     def validate_time_format(self, time_str):
         try:
             datetime.strptime(time_str, "%H:%M")
@@ -1004,9 +1037,13 @@ class ShyftGUI:
         justification_window.bind(f"<{modifier_key}-w>", lambda event: self.on_justification_close(justification_window))
         justification_window.bind(f"<{modifier_key}-W>", lambda event: self.on_justification_close(justification_window))
 
+        # Main frame to hold all components
+        main_frame = ttk.Frame(justification_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
         # Create a frame for task-specific data fields
-        task_data_frame = ttk.Frame(justification_window)
-        task_data_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))  # Reduced bottom padding
+        task_data_frame = ttk.Frame(main_frame)
+        task_data_frame.pack(fill=tk.BOTH, expand=True)
         
         task_fields = [
             ("Platform ID", str),
@@ -1030,9 +1067,13 @@ class ShyftGUI:
         task_data_frame.columnconfigure(0, weight=1)
         task_data_frame.columnconfigure(1, weight=1)
 
+        # Add a separator (divider) here
+        separator = ttk.Separator(main_frame, orient='horizontal')
+        separator.pack(fill='x', pady=10)
+
         # Rank selection
-        rank_frame = ttk.Frame(justification_window)
-        rank_frame.pack(pady=(5, 10), fill=tk.X, padx=10)  # Reduced top padding
+        rank_frame = ttk.Frame(main_frame)
+        rank_frame.pack(fill=tk.X)
         rank_var = tk.StringVar()
         rank_options = [
             "(1) is much better than (2).",
@@ -1048,8 +1089,8 @@ class ShyftGUI:
         rank_dropdown.set(rank_options[0])
 
         # Justification text box
-        justification_frame = ttk.Frame(justification_window)
-        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True, padx=10)
+        justification_frame = ttk.Frame(main_frame)
+        justification_frame.pack(pady=(10, 0), fill=tk.BOTH, expand=True)
         ttk.Label(justification_frame, text="Justification:").pack()
         justification_text = Text(justification_frame, wrap=tk.WORD, height=8)
         justification_text.pack(fill=tk.BOTH, expand=True)
@@ -1067,8 +1108,8 @@ class ShyftGUI:
             justification_window.destroy()
 
         # Buttons
-        button_frame = ttk.Frame(justification_window)
-        button_frame.pack(pady=10, padx=10)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=(10, 0))
         ttk.Button(button_frame, text="Submit", command=submit_data).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=lambda: self.on_justification_close(justification_window)).pack(side=tk.LEFT, padx=5)
 
@@ -1082,7 +1123,7 @@ class ShyftGUI:
 
         justification_window.focus_set()
         return justification_window
-
+    
     def on_justification_close(self, window):
         if messagebox.askyesno("Confirm", "Are you sure you want to cancel? This will end the current shift logging process."):
             window.result = None  # Set result to None to indicate cancellation
