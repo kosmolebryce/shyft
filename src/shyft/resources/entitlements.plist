@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Enable sandboxing -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    
+    <!-- Allow access to user-selected files (e.g., through file dialogs) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Allow network access -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Allow access to the user's home directory -->
+    <key>com.apple.security.files.home-relative-path.read-only</key>
+    <true/>
+    
+    <!-- Allow access to system libraries -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    
+    <!-- Allow access to temporary directories -->
+    <key>com.apple.security.files.temp</key>
+    <true/>
+    
+    <!-- Allow automatic graphics switching (for laptops) -->
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    
+    <!-- Disable app sleep (for continuous tasks) -->
+    <key>NSAppSleepDisabled</key>
+    <true/>
+    
+    <!-- Enable high resolution (retina display) -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    
+    <!-- Allow arbitrary network loads (if needed) -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

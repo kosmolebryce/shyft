@@ -1,5 +1,3 @@
-import configparser
-import datetime
 import json
 import logging
 import multiprocessing
@@ -9,20 +7,30 @@ import re
 import threading
 import time
 import tkinter as tk
-import vypyr
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import ttk, messagebox, simpledialog, Text, colorchooser
-from vypyr.utils import tysk
+import appdirs
+import configparser
+
+# Initialize application-specific directory paths
+app_name = "Shyft"
+app_author = "ENCLAIM"
+
+# Determine application-specific directories
+app_data_dir = appdirs.user_data_dir(app_name, app_author)
+app_config_dir = appdirs.user_config_dir(app_name, app_author)
+app_cache_dir = appdirs.user_cache_dir(app_name, app_author)
+
+# Ensure directories exist
+Path(app_data_dir).mkdir(parents=True, exist_ok=True)
+Path(app_config_dir).mkdir(parents=True, exist_ok=True)
+Path(app_cache_dir).mkdir(parents=True, exist_ok=True)
 
 # Initialize logging
-if platform.system() == "Darwin":
-    LOGS_DIR = Path("~/Library/Application Support/Shyft/logs").expanduser()
-elif platform.system() == "Windows":
-    LOGS_DIR = Path(os.getenv("LOCALAPPDATA")) / "Shyft" / "logs"
-else:
-    LOGS_DIR = Path("~/.shyft/logs").expanduser()
+LOGS_DIR = Path(app_cache_dir) / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -31,16 +39,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration and Paths setup
-if platform.system() == "Darwin":
-    APP_SUPPORT_DIR = Path(os.path.expanduser("~/Library/Application Support/Shyft"))
-elif platform.system() == "Windows":
-    APP_SUPPORT_DIR = Path(os.getenv("LOCALAPPDATA")) / "Shyft"
-else:
-    APP_SUPPORT_DIR = Path(os.path.expanduser("~/.shyft"))
+DATA_FILE_PATH = Path(app_data_dir) / "data.json"
+CONFIG_FILE = Path(app_config_dir) / "config.ini"
 
-APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
-DATA_FILE_PATH = APP_SUPPORT_DIR / "data.json"
-CONFIG_FILE = APP_SUPPORT_DIR / "config.ini"
+# Read configuration file
+config = configparser.ConfigParser()
+if CONFIG_FILE.exists():
+    config.read(CONFIG_FILE)
+else:
+    logger.warning(f"Configuration file {CONFIG_FILE} does not exist. Using default settings.")
 
 DEFAULT_SHIFT_STRUCTURE = {
     "Date": "",
@@ -55,17 +62,11 @@ DEFAULT_SHIFT_STRUCTURE = {
 
 logger.debug("Configuration and paths setup completed.")
 
-
-def get_modifier_key():
-    if platform.system() == "Darwin":
-        return "Command"
-    else:
-        return "Control"
-
-
-modifier_key = get_modifier_key()
-logger.debug(f"Modifier key set to {modifier_key}.")
-
+# Modifier key
+if platform.system() == "Darwin":
+    modifier_key = "Command" # macOS
+else:
+    modifier_key = "Control"
 
 def format_to_two_decimals(value):
     try:
@@ -131,7 +132,7 @@ class TimerWindow:
             fg=self.time_color,
             bg=self.bg_color,
         )
-        self.timer_label.pack(expand=True, padx=10, pady=(5, 0))
+        self.timer_label.pack(expand=True, padx=0, pady=(5, 0))
 
         button_frame = tk.Frame(self.root, bg=self.bg_color)
         button_frame.pack(fill="x", padx=10, pady=(0, 5))
@@ -516,8 +517,8 @@ class ShyftGUI:
     def view_logs(self, event=None):
         os.chdir(LOGS_DIR)
         log_window = tk.Toplevel(self.root)
-        log_window.title("View Logs")
-        log_window.geometry("480x640")
+        log_window.geometry("480x640")  # Correctly apply geometry
+        log_window.title("View Logs")   # Correctly set the title
         log_window.bind("<Command-w>", close_current_window)
         log_window.bind("<Command-W>", close_current_window)
 
@@ -996,46 +997,78 @@ class ShyftGUI:
     def create_justification_window(self, shared_data):
         justification_window = tk.Toplevel(self.root)
         justification_window.title("Rank and Justification")
-        justification_window.geometry("400x300")
+        justification_window.geometry("400x400")
         justification_window.protocol("WM_DELETE_WINDOW", lambda: self.on_justification_close(justification_window))
 
         # Bind modifier_key + w to close/cancel
         justification_window.bind(f"<{modifier_key}-w>", lambda event: self.on_justification_close(justification_window))
         justification_window.bind(f"<{modifier_key}-W>", lambda event: self.on_justification_close(justification_window))
 
+        # Create a frame for task-specific data fields
+        task_data_frame = ttk.Frame(justification_window)
+        task_data_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))  # Reduced bottom padding
+        
+        task_fields = [
+            ("Platform ID", str),
+            ("Permalink", str),
+            ("Response #1 ID", str),
+            ("Response #2 ID", str)
+        ]
+
+        # Dictionary to store entry widgets
+        task_entries = {}
+
+        # Add labels and entry widgets to the grid
+        for i, (field, transform) in enumerate(task_fields):
+            label = ttk.Label(task_data_frame, text=f"Enter {field}:")
+            label.grid(row=i, column=0, sticky=tk.W, padx=5, pady=5)
+            entry = ttk.Entry(task_data_frame)
+            entry.grid(row=i, column=1, sticky=tk.EW, padx=5, pady=5)
+            task_entries[field] = entry
+
+        # Make the columns expand dynamically
+        task_data_frame.columnconfigure(0, weight=1)
+        task_data_frame.columnconfigure(1, weight=1)
+
         # Rank selection
         rank_frame = ttk.Frame(justification_window)
-        rank_frame.pack(pady=10)
+        rank_frame.pack(pady=(5, 10), fill=tk.X, padx=10)  # Reduced top padding
         rank_var = tk.StringVar()
         rank_options = [
-            "(1) is much better than (2)",
-            "(1) is slightly better than (2)",
-            "The responses are of equal quality",
-            "(2) is slightly better than (1)",
-            "(2) is much better than (1)",
-            "Task rejected for containing sensitive content"
-        ]
+            "(1) is much better than (2).",
+            "(1) is slightly better than (2).",
+            "The responses are of equal quality.",
+            "(2) is slightly better than (1).",
+            "(2) is much better than (1).",
+            "Task rejected for containing unratable content."]
+            
         ttk.Label(rank_frame, text="Rank:").pack(side=tk.LEFT)
         rank_dropdown = ttk.Combobox(rank_frame, textvariable=rank_var, values=rank_options, state="readonly", width=40)
-        rank_dropdown.pack(side=tk.LEFT)
+        rank_dropdown.pack(side=tk.LEFT, expand=True, fill=tk.X)
         rank_dropdown.set(rank_options[0])
 
         # Justification text box
         justification_frame = ttk.Frame(justification_window)
-        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        justification_frame.pack(pady=10, fill=tk.BOTH, expand=True, padx=10)
         ttk.Label(justification_frame, text="Justification:").pack()
         justification_text = Text(justification_frame, wrap=tk.WORD, height=8)
         justification_text.pack(fill=tk.BOTH, expand=True)
 
         def submit_data():
             justification_window.result = shared_data.copy()
+            for field, entry in task_entries.items():
+                try:
+                    justification_window.result[field] = entry.get()
+                except ValueError:
+                    messagebox.showerror("Error", f"Invalid input for {field}")
+                    return
             justification_window.result['Rank'] = rank_var.get()
             justification_window.result['Justification'] = justification_text.get("1.0", tk.END).strip()
             justification_window.destroy()
 
         # Buttons
         button_frame = ttk.Frame(justification_window)
-        button_frame.pack(pady=10)
+        button_frame.pack(pady=10, padx=10)
         ttk.Button(button_frame, text="Submit", command=submit_data).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=lambda: self.on_justification_close(justification_window)).pack(side=tk.LEFT, padx=5)
 
@@ -1049,7 +1082,7 @@ class ShyftGUI:
 
         justification_window.focus_set()
         return justification_window
-    
+
     def on_justification_close(self, window):
         if messagebox.askyesno("Confirm", "Are you sure you want to cancel? This will end the current shift logging process."):
             window.result = None  # Set result to None to indicate cancellation
@@ -1064,7 +1097,6 @@ class ShyftGUI:
             self.attempt_task(shared_data)
         else:
             self.finish_logging()
-                
 
     def attempt_task(self, shared_data):
         # Start the timer if it's not already running
@@ -1077,29 +1109,8 @@ class ShyftGUI:
             self.disable_theme_menu()
             self.enable_topmost_menu()
 
-        # Collect data specific to this task
-        task_fields = [
-            ("Platform ID", str),
-            ("Permalink", str),
-            ("Response #1 ID", str),
-            ("Response #2 ID", str)
-        ]
-        
-        task_data = shared_data.copy()
-        for field, transform in task_fields:
-            dialog = IndependentAskString(self.root, field, f"Enter {field}")
-            if dialog.result is None:  # User clicked cancel
-                self.finish_logging(cancel=True)
-                return
-            try:
-                task_data[field] = transform(dialog.result)
-            except ValueError:
-                messagebox.showerror("Error", f"Invalid input for {field}")
-                self.finish_logging(cancel=True)
-                return
-
         # Create justification window
-        justification_window = self.create_justification_window(task_data)
+        justification_window = self.create_justification_window(shared_data)
         self.root.wait_window(justification_window)
 
         # Check the result after the justification window is closed
@@ -1109,7 +1120,6 @@ class ShyftGUI:
         else:
             self.finish_logging(cancel=True)
 
-        
     def finish_logging(self, cancel=False):
         if cancel or not self.collected_data:
             if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):
@@ -1122,19 +1132,6 @@ class ShyftGUI:
                 messagebox.showinfo("Cancelled", "Autologger process cancelled.")
         else:
             self.log_shift()
-            
-    def cancel():
-        custom_window.destroy()
-        self.finish_logging(cancel=True)
-
-    def ask_attempt_another(self, shared_data):
-        response = messagebox.askyesno(
-            "Attempt Another Task", "Would you like to attempt another task?"
-        )
-        if response:
-            self.attempt_task(shared_data)
-        else:
-            self.finish_logging()
 
     def log_shift(self):
         if self.timer_window and tk.Toplevel.winfo_exists(self.timer_window.root):

@@ -1,5 +1,4 @@
-# src/vypyr/shyft/src/shyft/__main__.py
-from .Shyft import main
+from shyft import Shyft  # Use absolute import
 
 if __name__ == "__main__":
-    main()
+    Shyft.main()  # Or the appropriate function to start your application
